@@ -80,7 +80,7 @@ Setup
 
 **Arch Linux**: `pacman -S python-websocket-client`
 
-**Debian/Ubuntu**: `apt install weechat-python python-websocket`. If using WeeChat 2.6 or newer, run `apt install weechat-python python3-websocket` instead.
+**Debian/Ubuntu**: `apt install weechat-python python3-websocket`
 
 **Fedora**: `dnf install python3-websocket-client`
 
@@ -88,10 +88,7 @@ Setup
 
 **OpenBSD**: `pkg_add weechat-python py3-websocket-client`
 
-**Other**: `pip3 install websocket-client`
-
-Note for **macOS**: If you installed WeeChat with Homebrew, you will have to locate the python runtime environment used.
-If `--with-python@2` was used, you should use: `sudo /usr/local/opt/python@2/bin/pip2 install websocket_client`
+**Other**: `python3 -m pip install websocket-client`
 
 ### 2. Install and load wee-slack
 
@@ -171,6 +168,10 @@ run in WeeChat. The command is of the form:
 /slack register <code>
 ```
 
+Note that this will store your token in plain text in the
+`plugins.var.python.slack.slack_api_token` option. See "Optional: Secure the
+tokens" below for how to secure it.
+
 Your Slack team is now added, and you can complete the setup by reloading the
 wee-slack script.
 
@@ -194,18 +195,24 @@ token (but not the token itself). If you're worried about this, you can use the
 8. Return to WeeChat and run `/slack register <token>:<cookie>`.
 9. Reload the script with `/python reload slack`.
 
+Note that this will store your token in plain text in the
+`plugins.var.python.slack.slack_api_token` option. See "Optional: Secure the
+tokens" below for how to secure it.
+
 Note that if you log in or out of any teams in your browser, the cookie will be
 invalidated, and you will have to update it.
 
 Note that in some cases it may be necessary to include the `d-s` cookie as
 well. If so, you can supply it in this format `<token>:d=<d_cookie>;d-s=<d-s_cookie>`.
 
-If you use Firefox, you can run the `extract_token_from_browser.py` script to
-get the tokens and cookies for all the teams you're logged into:
+If you use Chrome or Firefox, you can run the `extract_token_from_browser.py`
+script to get the tokens and cookies for all the teams you're logged into:
 
 ```
-./extract_token_from_browser.py firefox
+./extract_token_from_browser.py <browser>
 ```
+
+(Note this script requires the Plyvel, PyCryptodome and SecretStorage libraries for Chrome and may require the python-snappy library for Firefox.)
 
 #### Optional: Connecting to multiple teams
 
@@ -324,29 +331,10 @@ or symlink the
 [`weemoji.json`](https://github.com/wee-slack/wee-slack/blob/master/weemoji.json)
 file to your WeeChat config directory (e.g. `~/.local/share/weechat` or
 `~/.weechat`). If doing this after starting wee-slack, you will have to reload
-it by running `/python reload slack`. Then append `|%(emoji)` to the
-`weechat.completion.default_template` config option, e.g. like this:
-
-```
-/set weechat.completion.default_template "%(nicks)|%(irc_channels)|%(emoji)"
-```
+it by running `/python reload slack`.
 
 Emoji names can be completed by typing colon and the start of the emoji name
 and pressing tab.
-
-### User group tab completions
-
-To enable tab completions for usergroups append `|%(usergroups)` to the
-`weechat.completion.default_template` config option, e.g. like this:
-
-```
-/set weechat.completion.default_template "%(nicks)|%(irc_channels)|%(usergroups)"
-```
-
-If you already added `%(emoji)` to this config option, like described in the
-last section, make sure not to overwrite that. The usergroup will appear in the
-same format as nicks, like the following: `@marketing`, where marketing is the
-usergroup handle.
 
 ### Cursor and mouse mode
 

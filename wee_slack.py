@@ -263,10 +263,11 @@ class WeechatWrapper(object):
     # first, we want to disable the prefix, which we do by specifying the same
     # number of spaces, so it aligns correctly.
     def prnt_date_tags(self, buffer, date, tags, message):
-        prefix, _, _ = message.partition("\t")
-        prefix = weechat.string_remove_color(encode_to_utf8(prefix), "")
-        prefix_spaces = " " * weechat.strlen_screen(prefix)
-        message = message.replace("\n", "\n{}\t".format(prefix_spaces))
+        if weechat_version < 0x04000000:
+            prefix, _, _ = message.partition("\t")
+            prefix = weechat.string_remove_color(encode_to_utf8(prefix), "")
+            prefix_spaces = " " * weechat.strlen_screen(prefix)
+            message = message.replace("\n", "\n{}\t".format(prefix_spaces))
         return self.wrap_for_utf8(self.wrapped_class.prnt_date_tags)(
             buffer, date, tags, message
         )
@@ -861,13 +862,15 @@ class EventRouter(object):
                     if "channel" in j:
                         channel_id = (
                             j["channel"]["id"]
-                            if type(j["channel"]) == dict
+                            if isinstance(j["channel"], dict)
                             else j["channel"]
                         )
                         channel = team.channels.get(channel_id, channel)
                     if "user" in j:
                         user_id = (
-                            j["user"]["id"] if type(j["user"]) == dict else j["user"]
+                            j["user"]["id"]
+                            if isinstance(j["user"], dict)
+                            else j["user"]
                         )
                         metadata["user"] = team.users.get(user_id)
 
@@ -1714,6 +1717,11 @@ class SlackTeam(object):
                          "localvar_set_slack_type", self.type)
             w.buffer_set(self.channel_buffer, "localvar_set_nick", self.nick)
             w.buffer_set(self.channel_buffer, "localvar_set_server", self.name)
+            w.buffer_set(
+                self.channel_buffer,
+                "localvar_set_completion_default_template",
+                "${weechat.completion.default_template}|%(usergroups)|%(emoji)",
+            )
             self.buffer_merge()
 
     def buffer_merge(self, config_value=None):
@@ -1948,7 +1956,7 @@ class SlackChannelCommon(object):
         extra_tags = None
         if message.subtype == "thread_broadcast":
             extra_tags = [message.subtype]
-        elif type(message) == SlackThreadMessage and not thread_channel:
+        elif isinstance(message, SlackThreadMessage) and not thread_channel:
             if config.thread_messages_in_channel:
                 extra_tags = [message.subtype]
             else:
@@ -1960,6 +1968,7 @@ class SlackChannelCommon(object):
             message.ts,
             tagset=tagset,
             tag_nick=message.sender_plain,
+            prefix_color=message.prefix_color,
             history_message=history_message,
             no_log=no_log,
             extra_tags=extra_tags,
@@ -2124,13 +2133,13 @@ class SlackChannelCommon(object):
             m.change_text(text)
 
         if (
-            type(m) == SlackMessage
+            not isinstance(m, SlackThreadMessage)
             or m.subtype == "thread_broadcast"
             or config.thread_messages_in_channel
         ):
             new_text = self.render(m, force=True)
             modify_buffer_line(self.channel_buffer, ts, new_text)
-        if type(m) == SlackThreadMessage or m.thread_channel is not None:
+        if isinstance(m, SlackThreadMessage) or m.thread_channel is not None:
             thread_channel = (
                 m.parent_message.thread_channel
                 if isinstance(m, SlackThreadMessage)
@@ -2440,6 +2449,11 @@ class SlackChannel(SlackChannelCommon):
                 self.channel_buffer, "localvar_set_channel", self.formatted_name()
             )
             w.buffer_set(self.channel_buffer, "localvar_set_nick", self.team.nick)
+            w.buffer_set(
+                self.channel_buffer,
+                "localvar_set_completion_default_template",
+                "${weechat.completion.default_template}|%(usergroups)|%(emoji)",
+            )
             self.buffer_rename_in_progress = True
             w.buffer_set(
                 self.channel_buffer, "short_name", self.formatted_name(style="sidebar")
@@ -2488,6 +2502,7 @@ class SlackChannel(SlackChannelCommon):
         timestamp,
         tagset,
         tag_nick=None,
+        prefix_color=None,
         history_message=False,
         no_log=False,
         extra_tags=None,
@@ -2511,6 +2526,7 @@ class SlackChannel(SlackChannelCommon):
                 tagset,
                 user=tag_nick,
                 self_msg=self_msg,
+                prefix_color=prefix_color,
                 backlog=backlog,
                 no_log=no_log,
                 extra_tags=extra_tags,
@@ -2821,7 +2837,7 @@ class SlackChannelVisibleMessages(MappingReversible):
 
         message = self.get(ts)
         if (
-            type(message) == SlackThreadMessage
+            isinstance(message, SlackThreadMessage)
             and message.subtype != "thread_broadcast"
             and not config.thread_messages_in_channel
         ):
@@ -3115,6 +3131,7 @@ class SlackThreadChannel(SlackChannelCommon):
         timestamp,
         tagset,
         tag_nick=None,
+        prefix_color=None,
         history_message=False,
         no_log=False,
         extra_tags=None,
@@ -3135,6 +3152,7 @@ class SlackThreadChannel(SlackChannelCommon):
                 tagset,
                 user=tag_nick,
                 self_msg=self_msg,
+                prefix_color=prefix_color,
                 backlog=backlog,
                 no_log=no_log,
                 extra_tags=extra_tags,
@@ -3227,6 +3245,11 @@ class SlackThreadChannel(SlackChannelCommon):
                 self.channel_buffer, "localvar_set_channel", self.formatted_name()
             )
             w.buffer_set(self.channel_buffer, "localvar_set_server", self.team.name)
+            w.buffer_set(
+                self.channel_buffer,
+                "localvar_set_completion_default_template",
+                "${weechat.completion.default_template}|%(usergroups)|%(emoji)",
+            )
             self.buffer_rename_in_progress = True
             w.buffer_set(
                 self.channel_buffer, "short_name", self.formatted_name(style="sidebar")
@@ -3394,14 +3417,7 @@ class SlackMessage(object):
 
         blocks = self.message_json.get("blocks", [])
         blocks_rendered = "\n".join(unfurl_blocks(blocks))
-        has_rich_text = any(block["type"] == "rich_text" for block in blocks)
-        if has_rich_text:
-            text = self.message_json.get("text", "")
-            if blocks_rendered:
-                if text:
-                    text += "\n"
-                text += blocks_rendered
-        elif blocks_rendered:
+        if blocks_rendered:
             text = blocks_rendered
         else:
             text = self.message_json.get("text", "")
@@ -3500,6 +3516,14 @@ class SlackMessage(object):
     @property
     def sender_plain(self):
         return self.get_sender(True)
+
+    @property
+    def prefix_color(self):
+        user = self.team.users.get(self.user_identifier)
+        if user:
+            return user.color_name
+        else:
+            return get_nick_color(self.sender_plain)
 
     def get_reaction(self, reaction_name):
         for reaction in self.message_json.get("reactions", []):
@@ -4597,7 +4621,47 @@ def unfurl_blocks(blocks):
                     block_text.append(unfurl_block_element(block["title"]))
                 block_text.append(unfurl_block_element(block))
             elif block["type"] == "rich_text":
-                continue
+                for element in block.get("elements", []):
+                    if element["type"] == "rich_text_section":
+                        rendered = unfurl_rich_text_section(element)
+                        if rendered:
+                            block_text.append(rendered)
+                    elif element["type"] == "rich_text_list":
+                        rendered = [
+                            "{}{} {}".format(
+                                "    " * element.get("indent", 0),
+                                block_list_prefix(
+                                    element, element.get("offset", 0) + i
+                                ),
+                                unfurl_rich_text_section(e),
+                            )
+                            for i, e in enumerate(element["elements"])
+                        ]
+                        block_text.extend(rendered)
+                    elif element["type"] == "rich_text_quote":
+                        lines = [
+                            "> {}".format(line)
+                            for e in element["elements"]
+                            for line in unfurl_block_element(e).split("\n")
+                        ]
+                        block_text.extend(lines)
+                    elif element["type"] == "rich_text_preformatted":
+                        texts = [
+                            e.get("text", e.get("url", "")) for e in element["elements"]
+                        ]
+                        if texts:
+                            block_text.append("```\n{}\n```".format("".join(texts)))
+                    else:
+                        text = '<<Unsupported rich_text type "{}">>'.format(
+                            element["type"]
+                        )
+                        block_text.append(colorize_string(config.color_deleted, text))
+                        dbg(
+                            "Unsupported rich_text element: '{}'".format(
+                                json.dumps(element)
+                            ),
+                            level=4,
+                        )
             else:
                 block_text.append(
                     colorize_string(
@@ -4605,7 +4669,7 @@ def unfurl_blocks(blocks):
                         '<<Unsupported block type "{}">>'.format(block["type"]),
                     )
                 )
-                dbg('Unsupported block: "{}"'.format(json.dumps(block)), level=4)
+                dbg("Unsupported block: '{}'".format(json.dumps(block)), level=4)
         except Exception as e:
             dbg(
                 "Failed to unfurl block ({}): {}".format(repr(e), json.dumps(block)),
@@ -4614,13 +4678,123 @@ def unfurl_blocks(blocks):
     return block_text
 
 
+def convert_int_to_letter(num):
+    letter = ""
+    while num > 0:
+        num -= 1
+        letter = chr((num % 26) + 97) + letter
+        num //= 26
+    return letter
+
+
+def convert_int_to_roman(num):
+    roman_numerals = {
+        1000: "m",
+        900: "cm",
+        500: "d",
+        400: "cd",
+        100: "c",
+        90: "xc",
+        50: "l",
+        40: "xl",
+        10: "x",
+        9: "ix",
+        5: "v",
+        4: "iv",
+        1: "i",
+    }
+    roman_numeral = ""
+    for value, symbol in roman_numerals.items():
+        while num >= value:
+            roman_numeral += symbol
+            num -= value
+    return roman_numeral
+
+
+def block_list_prefix(element, index):
+    if element["style"] == "ordered":
+        if element["indent"] == 0 or element["indent"] == 3:
+            return "{}.".format(index + 1)
+        elif element["indent"] == 1 or element["indent"] == 4:
+            return "{}.".format(convert_int_to_letter(index + 1))
+        else:
+            return "{}.".format(convert_int_to_roman(index + 1))
+    else:
+        if element["indent"] == 0 or element["indent"] == 3:
+            return "•"
+        elif element["indent"] == 1 or element["indent"] == 4:
+            return "◦"
+        else:
+            return "▪︎"
+
+
+def unfurl_rich_text_section(block):
+    text = "".join(
+        unfurl_block_element(sub_element) for sub_element in block["elements"]
+    )
+    if text.endswith("\n"):
+        return text[:-1]
+    else:
+        return text
+
+
 def unfurl_block_element(text):
     if text["type"] == "mrkdwn":
         return render_formatting(text["text"])
+    elif text["type"] == "text":
+        colors = []
+        characters = []
+        if text.get("style", {}).get("bold"):
+            colors.append(config.render_bold_as)
+            characters.append("*")
+        if text.get("style", {}).get("italic"):
+            colors.append(config.render_italic_as)
+            characters.append("_")
+        if text.get("style", {}).get("strike"):
+            characters.append("~")
+        if text.get("style", {}).get("code"):
+            characters.append("`")
+
+        colors_start = "".join(w.color(color) for color in colors)
+        colors_end = "".join(w.color("-" + color) for color in colors)
+        return (
+            colors_start
+            + "".join(characters)
+            + text["text"]
+            + "".join(reversed(characters))
+            + colors_end
+        )
     elif text["type"] == "plain_text":
         return text["text"]
     elif text["type"] == "image":
-        return "{} ({})".format(text["image_url"], text["alt_text"])
+        if text.get("alt_text"):
+            return "{} ({})".format(text["image_url"], text["alt_text"])
+        else:
+            return text["image_url"]
+    elif text["type"] == "link":
+        if text.get("text"):
+            if text.get("style", {}).get("code"):
+                return text["text"]
+            else:
+                return "{} ({})".format(text["url"], text["text"])
+        else:
+            return text["url"]
+    elif text["type"] == "emoji":
+        return replace_string_with_emoji(":{}:".format(text["name"]))
+    elif text["type"] == "user":
+        return resolve_ref("@{}".format(text["user_id"]))
+    elif text["type"] == "usergroup":
+        return resolve_ref("!subteam^{}".format(text["usergroup_id"]))
+    elif text["type"] == "broadcast":
+        return resolve_ref("@{}".format(text["range"]))
+    elif text["type"] == "channel":
+        return resolve_ref("#{}".format(text["channel_id"]))
+    else:
+        dbg("Unsupported block element: '{}'".format(json.dumps(text)), level=4)
+        return colorize_string(
+            config.color_deleted,
+            '<<Unsupported block element type "{}">>'.format(text["type"]),
+        )
 
 
 def unfurl_refs(text):
@@ -4765,7 +4939,7 @@ def unwrap_attachments(message, text_before):
             if footer:
                 ts = attachment.get("ts")
                 if ts:
-                    ts_int = ts if type(ts) == int else SlackTS(ts).major
+                    ts_int = ts if isinstance(ts, int) else SlackTS(ts).major
                     time_string = ""
                     if date.today() - date.fromtimestamp(ts_int) <= timedelta(days=1):
                         time_string = " at {time}"
@@ -4844,10 +5018,11 @@ def unwrap_files(message, message_json, text_before):
                 f["permalink"], message.team.identifier, message.channel.identifier
             )
             text = "{} ({})".format(url, f["title"])
-        elif (
-            f.get("url_private", None) is not None and f.get("title", None) is not None
-        ):
-            text = "{} ({})".format(f["url_private"], f["title"])
+        elif f.get("url_private"):
+            if f.get("title"):
+                text = "{} ({})".format(f["url_private"], f["title"])
+            else:
+                text = f["url_private"]
         else:
             dbg("File {} has unrecognized mode {}".format(f["id"], f.get("mode")), 5)
             text = colorize_string(
@@ -4928,7 +5103,7 @@ def create_user_status_string(profile):
 def create_reaction_string(reaction, myidentifier):
     if config.show_reaction_nicks:
         nicks = [resolve_ref("@{}".format(user)) for user in reaction["users"]]
-        users = "({})".format(",".join(nicks))
+        users = "({})".format(", ".join(nicks))
     else:
         users = len(reaction["users"])
     reaction_string = ":{}:{}".format(reaction["name"], users)
@@ -4973,6 +5148,14 @@ def modify_buffer_line(buffer_pointer, ts, new_text):
     while line_pointer and hdata_line_ts(line_pointer) != ts:
         is_last_line = False
         line_pointer = w.hdata_move(hdata.line, line_pointer, -1)
+
+    if not line_pointer:
+        return w.WEECHAT_RC_OK
+
+    if weechat_version >= 0x04000000:
+        data = w.hdata_pointer(hdata.line, line_pointer, "data")
+        w.hdata_update(hdata.line_data, data, {"message": new_text})
+        return w.WEECHAT_RC_OK
 
     # Find all lines for the message
     pointers = []
@@ -5033,6 +5216,9 @@ def nick_from_profile(profile, username):
 
 
 def format_nick(nick, previous_nick=None):
+    if weechat_version >= 0x04000000:
+        return nick
+
     if nick == previous_nick:
         nick = w.config_string(w.config_get("weechat.look.prefix_same_nick")) or nick
     nick_prefix = w.config_string(w.config_get("weechat.look.nick_prefix"))
@@ -5063,6 +5249,7 @@ def tag(
     tagset=None,
     user=None,
     self_msg=False,
+    prefix_color=None,
     backlog=False,
     no_log=False,
     extra_tags=None,
@@ -5079,7 +5266,12 @@ def tag(
     ts_tag = "slack_ts_{}".format(ts)
     slack_tag = "slack_{}".format(tagset or "default")
     nick_tag = ["nick_{}".format(user).replace(" ", "_")] if user else []
-    tags = [ts_tag, slack_tag] + nick_tag + tagsets.get(tagset, [])
+    prefix_nick_tag = (
+        ["prefix_nick_{}".format(prefix_color.replace(",", ":"))]
+        if prefix_color and weechat_version >= 0x04000000
+        else []
+    )
+    tags = [ts_tag, slack_tag] + nick_tag + prefix_nick_tag + tagsets.get(tagset, [])
     if self_msg or backlog:
         tags = tags_set_notify_none(tags)
         if self_msg:
@@ -5403,17 +5595,19 @@ def add_token(token, team_name=None):
 def msg_command_cb(data, current_buffer, args):
     aargs = args.split(None, 2)
     who = aargs[1].lstrip("@")
-    if who == "*":
-        who = EVENTROUTER.weechat_controller.buffers[current_buffer].name
-    else:
+    if who != "*":
         join_query_command_cb(data, current_buffer, "/query " + who)
 
     if len(aargs) > 2:
         message = aargs[2]
-        team = EVENTROUTER.weechat_controller.buffers[current_buffer].team
-        cmap = team.get_channel_map()
-        if who in cmap:
-            channel = team.channels[cmap[who]]
+        buffer_pointer = EVENTROUTER.weechat_controller.buffers[current_buffer]
+        team = buffer_pointer.team
+        if who == "*":
+            channel = buffer_pointer
+        else:
+            cmap = team.get_channel_map()
+            channel = team.channels.get(cmap.get(who))
+        if channel:
             channel.send_message(message)
     return w.WEECHAT_RC_OK_EAT
 
@@ -5455,14 +5649,16 @@ def command_teams(data, current_buffer, args):
 @utf8_decode
 def command_channels(data, current_buffer, args):
     """
-    /slack channels
+    /slack channels [regex]
     List the channels in the current team.
+    If regex is given show channels whose names match the regular expression.
     """
     team = EVENTROUTER.weechat_controller.buffers[current_buffer].team
+    pat = re.compile(args)
     channels = [
         channel
         for channel in team.channels.values()
-        if channel.type not in ["im", "mpim"]
+        if channel.type not in ["im", "mpim"] and pat.search(channel.name)
     ]
 
     def extra_info_function(channel):
@@ -5473,7 +5669,12 @@ def command_channels(data, current_buffer, args):
         else:
             return "not a member"
 
-    return print_team_items_info(team, "Channels", channels, extra_info_function)
+    if args:
+        return print_team_items_info(
+            team, 'Channels that match "' + args + '"', channels, extra_info_function
+        )
+    else:
+        return print_team_items_info(team, "Channels", channels, extra_info_function)
 
 
 @slack_buffer_required
@@ -6179,6 +6380,17 @@ def line_event_cb(data, signal, hashtable):
     return w.WEECHAT_RC_OK
 
 
+@utf8_decode
+def info_slack_message_cb(data, info_name, args):
+    current_channel = EVENTROUTER.weechat_controller.buffers.get(w.current_buffer())
+    message = current_channel.message_from_hash_or_index(args)
+
+    if not message:
+        print_message_not_found_error(args)
+        return ""
+    return message.render()
+
+
 @slack_buffer_required
 @utf8_decode
 def command_back(data, current_buffer, args):
@@ -6424,6 +6636,14 @@ def setup_hooks():
     w.hook_hsignal("slack_cursor_reply", "line_event_cb", "reply")
     w.hook_hsignal("slack_cursor_thread", "line_event_cb", "thread")
 
+    w.hook_info(
+        "slack_message",
+        "get contents of a slack message",
+        "id or count to the message",
+        "info_slack_message_cb",
+        "",
+    )
+
     # Hooks to fix/implement
     # w.hook_signal('buffer_opened', "buffer_opened_cb", "")
     # w.hook_signal('window_scrolled', "scrolled_cb", "")
@@ -6633,7 +6853,8 @@ class PluginConfig(object):
         "slack_api_token": Setting(
             default="INSERT VALID KEY HERE!",
             desc="List of Slack API tokens, one per Slack instance you want to"
-            " connect to. See the README for details on how to get these.",
+            " connect to; see the README for details on how to get these"
+            " (note: content is evaluated, see /help eval).",
         ),
         "slack_timeout": Setting(
             default="20000", desc="How long (ms) to wait when communicating with Slack."
