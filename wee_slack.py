@@ -1572,6 +1572,26 @@ class SlackSubteam(object):
         return compare_str == self.identifier
 
 
+class SlackChannelSection(object):
+    """
+    Represents a slack channel section
+    """
+
+    def __init__(self, **kwargs):
+        self.identifier = kwargs["channel_section_id"]
+        self.name = kwargs["name"]
+        self.type = kwargs["type"]
+        self.emoji = kwargs.get("emoji", "")
+        self.next_channel_section_id = kwargs["next_channel_section_id"]
+        self.channel_ids = kwargs["channel_id_pages"]["channel_ids"]
+
+    def __repr__(self):
+        return "Name:{} Identifier:{}".format(self.name, self.identifier)
+
+    def __eq__(self, compare_str):
+        return compare_str == self.identifier
+
+
 class SlackTeam(object):
     """
     incomplete
@@ -1690,7 +1710,8 @@ class SlackTeam(object):
             )
             w.buffer_set(self.channel_buffer, "input_multiline", "1")
             w.buffer_set(self.channel_buffer, "localvar_set_type", "server")
-            w.buffer_set(self.channel_buffer, "localvar_set_slack_type", self.type)
+            w.buffer_set(self.channel_buffer,
+                         "localvar_set_slack_type", self.type)
             w.buffer_set(self.channel_buffer, "localvar_set_nick", self.nick)
             w.buffer_set(self.channel_buffer, "localvar_set_server", self.name)
             self.buffer_merge()
@@ -6969,6 +6990,15 @@ def initiate_connection(token):
         token=token,
         callback=handle_getPresence,
     )
+
+    EVENTROUTER.receive(s)
+    s = SlackRequest(
+        None,
+        "users.channelSections.list",
+        token=token,
+        callback=handle_channel_sections_list,
+    )
+
     EVENTROUTER.receive(s)
 
 
@@ -7025,8 +7055,15 @@ def create_team(token, initial_data):
                 users[myidentifier].profile, response_json["self"]["name"]
             )
 
+            channel_sections = {}
+            for channel_section in initial_data["channel_sections"]:
+                for channel_id in channel_section["channel_ids_page"]["channel_ids"]:
+                    channel_sections[channel_id] = SlackChannelSection(
+                        channel_section)
+
             channels = {}
             for channel_info in initial_data["channels"]:
+                channel_info["channel_section"] = channel_sections[channel_info["id"]]
                 channels[channel_info["id"]] = create_channel_from_info(
                     eventrouter, channel_info, None, myidentifier, users
                 )
