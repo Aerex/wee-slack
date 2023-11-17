@@ -1,5 +1,52 @@
 # Changelog
 
+## 2.10.1 (2023-09-22)
+
+### Slack API changes
+
+- Fix the connection to the websocket when using session (`xoxc-`) tokens. These connections started failing after a change in the Slack API which made wee-slack unable to run at all (issue #901).
+
+### Bug fixes
+
+- Fix being invited to a private channel not working.
+- Add join messages for your own user to hotlist (if unread).
+- Prevent errors being printed in core buffer on events for unknown channels.
+- Fix rendering of `<` and `>`. A regression in 2.10.0 made these be removed.
+- Fix rendering of huddles. A regression in 2.10.0 made the text for huddle messages duplicated.
+- Fix rendering of emojis when `render_emoji_as_string` is set to `both`. A regression in 2.10.0 made emojis show twice with this option (PR #902).
+- Print an error message when running the `/reply` command without any arguments (issue #900).
+
+## 2.10.0 (2023-08-24)
+
+### WeeChat compatibility
+
+- Support multiline rendering in WeeChat >= 4.0.0.
+
+### Features
+
+- Display link to join huddle when started (PR #885).
+- Support Chromium, Chrome and Firefox snap in `extract_token_from_browser.py` (PR #884).
+- Detect default Firefox profile in `extract_token_from_browser.py` (PR #887).
+- Support specifying profile to use in `extract_token_from_browser.py` (PR #884, PR #887).
+- Read new local storage format for Firefox in `extract_token_from_browser.py` (PR #887).
+- Automatically enable emoji/usergroups completion.
+- Add info to get contents of a message (fixes #889).
+- Filter channel list based on regular expression (PR #896).
+
+### Bug fixes
+
+- Support `/msg *` in thread buffers (fixes #888).
+- Improve rendering of messages by using the `rich_text` block (fixes #354, fixes #550, fixes #893).
+
+### Slack API changes
+
+- Fix showing origin channel in previews of Slack messages when a message is linked after it was broken by an API change.
+
+### Other changes
+
+- Include a space between nicks in reaction string.
+- Update Dockerfile to use XDG directories (PR #894).
+
 ## 2.9.1 (2022-10-30)
 
 ### WeeChat compatibility
