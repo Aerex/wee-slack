@@ -116,7 +116,8 @@ def weechat_command(
                 run_async(result)
             return
 
-        shared.commands[cmd] = Command(cmd, top_level, "", "", "", completion, wrapper)
+        shared.commands[cmd] = Command(
+            cmd, top_level, "", "", "", completion, wrapper)
 
         return wrapper
 
@@ -258,7 +259,8 @@ def command_slack_workspace_rename(buffer: str, args: List[str], options: Option
     new_name = args[1]
     workspace = shared.workspaces.get(old_name)
     if not workspace:
-        print_error(f'workspace "{old_name}" not found for "workspace rename" command')
+        print_error(
+            f'workspace "{old_name}" not found for "workspace rename" command')
         return
     workspace.name = new_name
     shared.workspaces[new_name] = workspace
@@ -275,7 +277,8 @@ def command_slack_workspace_del(buffer: str, args: List[str], options: Options):
     name = args[0]
     workspace = shared.workspaces.get(name)
     if not workspace:
-        print_error(f'workspace "{name}" not found for "workspace del" command')
+        print_error(
+            f'workspace "{name}" not found for "workspace del" command')
         return
     if workspace.is_connected:
         print_error(
@@ -297,7 +300,8 @@ async def create_conversation_for_users(
     conversation_open_response = await workspace.api.conversations_open(user_ids)
     conversation_id = conversation_open_response["channel"]["id"]
     workspace.conversations.initialize_items(
-        [conversation_id], {conversation_id: conversation_open_response["channel"]}
+        [conversation_id], {
+            conversation_id: conversation_open_response["channel"]}
     )
     conversation = await workspace.conversations[conversation_id]
     await conversation.open_buffer(switch=True)
@@ -419,6 +423,9 @@ async def command_slack_reply(buffer: str, args: List[str], options: Options):
             )
             return
         thread_ts = slack_buffer.ts_from_hash_or_index(split_args[0])
+        if thread_ts is None:
+            print_message_not_found_error(split_args[0])
+            return
         await slack_buffer.post_message(split_args[1], thread_ts, broadcast)
 
 
@@ -453,7 +460,8 @@ async def command_slack_mute(buffer: str, args: List[str], options: Options):
             conversation.name_with_prefix("short_name_without_padding")
             for conversation in conversations
         )
-        weechat.prnt("", f"Muted conversations: {', '.join(conversation_names)}")
+        weechat.prnt(
+            "", f"Muted conversations: {', '.join(conversation_names)}")
         return
 
     muted_channels = set(slack_buffer.workspace.muted_channels)
@@ -473,7 +481,8 @@ def print_uncaught_error(error: UncaughtError, detailed: bool, options: Options)
             weechat.prnt("", f"  {line}")
     if options.get("data"):
         if isinstance(error.exception, SlackRtmError):
-            weechat.prnt("", f"  data: {json.dumps(error.exception.message_json)}")
+            weechat.prnt(
+                "", f"  data: {json.dumps(error.exception.message_json)}")
         elif isinstance(error.exception, SlackError):
             weechat.prnt("", f"  data: {json.dumps(error.exception.data)}")
         else:
@@ -668,9 +677,11 @@ def focus_event_cb(data: str, signal: str, hashtable: Dict[str, str]) -> int:
         return weechat.WEECHAT_RC_OK
 
     if data == "auto":
-        emoji_match = re.match(EMOJI_CHAR_OR_NAME_REGEX_STRING, hashtable["_chat_eol"])
+        emoji_match = re.match(
+            EMOJI_CHAR_OR_NAME_REGEX_STRING, hashtable["_chat_eol"])
         if emoji_match is not None:
-            emoji = emoji_match.group("emoji_char") or emoji_match.group("emoji_name")
+            emoji = emoji_match.group(
+                "emoji_char") or emoji_match.group("emoji_name")
             run_async(conversation.send_change_reaction(ts, emoji, "toggle"))
         else:
             weechat.command(buffer_pointer, f"/input insert {message_hash}")
@@ -682,7 +693,8 @@ def focus_event_cb(data: str, signal: str, hashtable: Dict[str, str]) -> int:
         url = _get_linkarchive_url(slack_buffer, ts)
         weechat.command(buffer_pointer, f"/input insert {url}")
     elif data == "reply":
-        weechat.command(buffer_pointer, f"/input insert /reply {message_hash}\\x20")
+        weechat.command(
+            buffer_pointer, f"/input insert /reply {message_hash}\\x20")
     elif data == "thread":
         run_async(conversation.open_thread(message_hash, switch=True))
     else:
@@ -698,7 +710,8 @@ def register_commands():
         "/buffer set unread *", get_callback_name(buffer_set_unread_cb), ""
     )
     weechat.hook_command_run(
-        "/input set_unread_current_buffer", get_callback_name(buffer_set_unread_cb), ""
+        "/input set_unread_current_buffer", get_callback_name(
+            buffer_set_unread_cb), ""
     )
 
     for cmd, command in shared.commands.items():

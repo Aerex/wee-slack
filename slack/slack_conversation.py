@@ -278,7 +278,8 @@ class SlackConversation(SlackBuffer):
         if self._im_user is not None:
             return self._im_user.nick.format()
         elif self._info["is_im"] is True:
-            raise SlackError(self.workspace, "IM conversation without _im_user set")
+            raise SlackError(
+                self.workspace, "IM conversation without _im_user set")
         elif self._mpim_users is not None:
             return ",".join(sorted(user.nick.format() for user in self._mpim_users))
         else:
@@ -349,6 +350,7 @@ class SlackConversation(SlackBuffer):
             "localvar_set_nick": self.workspace.my_user.nick.raw_nick,
             "localvar_set_channel": name,
             "localvar_set_server": self.workspace.name,
+            "localvar_set_slack_muted": "1" if self.muted else "0",
             "localvar_set_completion_default_template": "${weechat.completion.default_template}|%(slack_channels)|%(slack_emojis)",
         }
 
@@ -399,7 +401,8 @@ class SlackConversation(SlackBuffer):
             parent_message.replies[reply.ts] = reply
             self._messages[reply.ts] = reply
 
-        parent_message.replies = OrderedDict(sorted(parent_message.replies.items()))
+        parent_message.replies = OrderedDict(
+            sorted(parent_message.replies.items()))
         self._messages = OrderedDict(sorted(self._messages.items()))
 
         parent_message.reply_history_filled = True
@@ -449,7 +452,8 @@ class SlackConversation(SlackBuffer):
                         if self.buffer_type == "private"
                         else MessagePriority.MESSAGE
                     )
-                    weechat.buffer_set(self.buffer_pointer, "hotlist", priority.value)
+                    weechat.buffer_set(self.buffer_pointer,
+                                       "hotlist", priority.value)
                     self.hotlist_tss.add(message.latest_reply)
 
     async def fill_history(self, update: bool = False):

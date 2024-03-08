@@ -39,9 +39,11 @@ if TYPE_CHECKING:
 
 
 def hdata_line_ts(line_pointer: str) -> Optional[SlackTs]:
-    data = weechat.hdata_pointer(weechat.hdata_get("line"), line_pointer, "data")
+    data = weechat.hdata_pointer(
+        weechat.hdata_get("line"), line_pointer, "data")
     for i in range(
-        weechat.hdata_integer(weechat.hdata_get("line_data"), data, "tags_count")
+        weechat.hdata_integer(weechat.hdata_get(
+            "line_data"), data, "tags_count")
     ):
         tag = weechat.hdata_string(
             weechat.hdata_get("line_data"), data, f"{i}|tags_array"
@@ -74,13 +76,15 @@ def modify_buffer_line(buffer_pointer: str, ts: SlackTs, new_text: str):
     is_last_line = True
     while line_pointer and hdata_line_ts(line_pointer) != ts:
         is_last_line = False
-        line_pointer = weechat.hdata_move(weechat.hdata_get("line"), line_pointer, -1)
+        line_pointer = weechat.hdata_move(
+            weechat.hdata_get("line"), line_pointer, -1)
 
     if not line_pointer:
         return False
 
     if shared.weechat_version >= 0x04000000:
-        data = weechat.hdata_pointer(weechat.hdata_get("line"), line_pointer, "data")
+        data = weechat.hdata_pointer(
+            weechat.hdata_get("line"), line_pointer, "data")
         weechat.hdata_update(
             weechat.hdata_get("line_data"), data, {"message": new_text}
         )
@@ -90,7 +94,8 @@ def modify_buffer_line(buffer_pointer: str, ts: SlackTs, new_text: str):
     pointers: List[str] = []
     while line_pointer and hdata_line_ts(line_pointer) == ts:
         pointers.append(line_pointer)
-        line_pointer = weechat.hdata_move(weechat.hdata_get("line"), line_pointer, -1)
+        line_pointer = weechat.hdata_move(
+            weechat.hdata_get("line"), line_pointer, -1)
     pointers.reverse()
 
     if not pointers:
@@ -108,7 +113,8 @@ def modify_buffer_line(buffer_pointer: str, ts: SlackTs, new_text: str):
             )
             tags = [
                 weechat.hdata_string(
-                    weechat.hdata_get("line_data"), line_data, f"{i}|tags_array"
+                    weechat.hdata_get(
+                        "line_data"), line_data, f"{i}|tags_array"
                 )
                 for i in range(tags_count)
             ]
@@ -122,7 +128,8 @@ def modify_buffer_line(buffer_pointer: str, ts: SlackTs, new_text: str):
             # Insert new lines to match the number of lines in the message
             weechat.buffer_set(buffer_pointer, "print_hooks_enabled", "0")
             for _ in range(extra_lines_count):
-                weechat.prnt_date_tags(buffer_pointer, ts.major, tags_str, " \t ")
+                weechat.prnt_date_tags(
+                    buffer_pointer, ts.major, tags_str, " \t ")
                 pointers.append(
                     weechat.hdata_pointer(
                         weechat.hdata_get("lines"), own_lines, "last_line"
@@ -141,8 +148,10 @@ def modify_buffer_line(buffer_pointer: str, ts: SlackTs, new_text: str):
     lines += [""] * (len(pointers) - len(lines))
 
     for pointer, line in zip(pointers, lines):
-        data = weechat.hdata_pointer(weechat.hdata_get("line"), pointer, "data")
-        weechat.hdata_update(weechat.hdata_get("line_data"), data, {"message": line})
+        data = weechat.hdata_pointer(
+            weechat.hdata_get("line"), pointer, "data")
+        weechat.hdata_update(weechat.hdata_get(
+            "line_data"), data, {"message": line})
     return True
 
 
@@ -317,7 +326,8 @@ class SlackBuffer(ABC):
                         weechat.hdata_get("line"), line_pointer, "data"
                     )
                     weechat.hdata_update(
-                        weechat.hdata_get("line_data"), data, {"message": new_text}
+                        weechat.hdata_get("line_data"), data, {
+                            "message": new_text}
                     )
                     line_pointer = weechat.hdata_move(
                         weechat.hdata_get("line"), line_pointer, -1
@@ -338,7 +348,8 @@ class SlackBuffer(ABC):
 
         if self.last_printed_ts is not None and message.ts <= self.last_printed_ts:
             new_text = await message.render_message(context=self.context, rerender=True)
-            did_update = modify_buffer_line(self.buffer_pointer, message.ts, new_text)
+            did_update = modify_buffer_line(
+                self.buffer_pointer, message.ts, new_text)
             if not did_update:
                 print_error(
                     f"Didn't find message with ts {message.ts} when last_printed_ts is {self.last_printed_ts}, message: {message}"
@@ -348,7 +359,8 @@ class SlackBuffer(ABC):
         rendered = await message.render(self.context)
         backlog = self.last_read is not None and message.ts <= self.last_read
         tags = await message.tags(backlog)
-        weechat.prnt_date_tags(self.buffer_pointer, message.ts.major, tags, rendered)
+        weechat.prnt_date_tags(self.buffer_pointer,
+                               message.ts.major, tags, rendered)
         if backlog:
             weechat.buffer_set(self.buffer_pointer, "unread", "")
         else:
@@ -399,7 +411,8 @@ class SlackBuffer(ABC):
             weechat.hdata_get("buffer"), self.buffer_pointer, "lines"
         )
 
-        line = weechat.hdata_pointer(weechat.hdata_get("lines"), lines, "last_line")
+        line = weechat.hdata_pointer(
+            weechat.hdata_get("lines"), lines, "last_line")
         while line and index:
             if not message_filter:
                 index -= 1
@@ -430,10 +443,13 @@ class SlackBuffer(ABC):
     ) -> Optional[SlackTs]:
         if not hash_or_index:
             return self.ts_from_index(1, message_filter)
+        ts_from_hash = self.ts_from_hash(hash_or_index)
+        if ts_from_hash is not None:
+            return ts_from_hash
         elif hash_or_index.isdigit():
             return self.ts_from_index(int(hash_or_index), message_filter)
         else:
-            return self.ts_from_hash(hash_or_index)
+            return None
 
     async def post_message(
         self,
@@ -471,7 +487,8 @@ class SlackBuffer(ABC):
             f |= re.MULTILINE if "m" in flags else 0
             f |= re.DOTALL if "s" in flags else 0
             old_message_text = message.text
-            new_message_text = re.sub(old, new, old_message_text, num_replace, f)
+            new_message_text = re.sub(
+                old, new, old_message_text, num_replace, f)
             if new_message_text != old_message_text:
                 await self.api.chat_update_message(
                     self.conversation, message.ts, new_message_text
@@ -517,7 +534,8 @@ class SlackBuffer(ABC):
             message_filter = "sender_self" if not emoji else None
             ts = self.ts_from_hash_or_index(msg_id, message_filter)
             if ts is None:
-                print_error(f"No slack message found for message id or index {msg_id}")
+                print_error(
+                    f"No slack message found for message id or index {msg_id}")
                 return
 
             if emoji and (reaction_change_type == "+" or reaction_change_type == "-"):

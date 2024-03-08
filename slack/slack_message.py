@@ -130,7 +130,7 @@ def convert_int_to_roman(num: int) -> str:
 
 def ts_from_tag(tag: str) -> Optional[SlackTs]:
     if tag.startswith(ts_tag_prefix):
-        return SlackTs(tag[len(ts_tag_prefix) :])
+        return SlackTs(tag[len(ts_tag_prefix):])
     return None
 
 
@@ -215,7 +215,8 @@ class PendingMessageItem:
         if self.item_type == "conversation":
             try:
                 conversation = await self.message.workspace.conversations[self.item_id]
-                name = conversation.name_with_prefix("short_name_without_padding")
+                name = conversation.name_with_prefix(
+                    "short_name_without_padding")
             except (SlackApiError, SlackError) as e:
                 if (
                     isinstance(e, SlackApiError)
@@ -329,7 +330,8 @@ class PendingMessageItem:
                 title = unhtmlescape(file.get("title", ""))
                 return format_url(file["url_private"], title)
             else:
-                error = SlackError(self.message.workspace, "Unsupported file", file)
+                error = SlackError(self.message.workspace,
+                                   "Unsupported file", file)
                 uncaught_error = UncaughtError(error)
                 store_uncaught_error(uncaught_error)
                 return with_color(
@@ -364,7 +366,8 @@ class SlackMessage:
         self._message_json = message_json
         self._rendered_prefix = None
         self._rendered_message = None
-        self._parsed_message: Optional[List[Union[str, PendingMessageItem]]] = None
+        self._parsed_message: Optional[List[Union[str,
+                                                  PendingMessageItem]]] = None
         self.conversation = conversation
         self.ts = SlackTs(message_json["ts"])
         self.replies: OrderedDict[SlackTs, SlackMessage] = OrderedDict()
@@ -518,7 +521,8 @@ class SlackMessage:
         self._parsed_message = None
 
     def update_message_json(self, message_json: SlackMessageDict):
-        self._message_json.update(message_json)  # pyright: ignore [reportArgumentType, reportCallIssue]
+        # pyright: ignore [reportArgumentType, reportCallIssue]
+        self._message_json.update(message_json)
         self._rendered_prefix = None
         self._rendered_message = None
         self._parsed_message = None
@@ -677,7 +681,8 @@ class SlackMessage:
 
         if self.deleted:
             self._parsed_message = [
-                with_color(shared.config.color.deleted_message.value, "(deleted)")
+                with_color(
+                    shared.config.color.deleted_message.value, "(deleted)")
             ]
 
         elif self._message_json.get("subtype") in [
@@ -725,7 +730,8 @@ class SlackMessage:
 
             huddle_text = "Huddle started" if not room["has_ended"] else "Huddle ended"
             name_text = f", name: {room['name']}" if room["name"] else ""
-            texts: List[Union[str, PendingMessageItem]] = [huddle_text + name_text]
+            texts: List[Union[str, PendingMessageItem]] = [
+                huddle_text + name_text]
 
             for channel_id in room["channels"]:
                 texts.append(
@@ -743,7 +749,8 @@ class SlackMessage:
                     for item in items
                 ]
 
-            files = self._render_files(self._message_json.get("files", []), bool(texts))
+            files = self._render_files(
+                self._message_json.get("files", []), bool(texts))
             attachment_items = self._render_attachments(texts)
             self._parsed_message = texts + files + attachment_items
 
@@ -808,7 +815,8 @@ class SlackMessage:
             )
         elif item_id.startswith("@"):
             return PendingMessageItem(
-                self, "user", removeprefix(item_id, "@"), "mention", fallback_name
+                self, "user", removeprefix(
+                    item_id, "@"), "mention", fallback_name
             )
         elif item_id.startswith("!subteam^"):
             return PendingMessageItem(
@@ -820,7 +828,8 @@ class SlackMessage:
             )
         elif item_id in ["!channel", "!everyone", "!group", "!here"]:
             return PendingMessageItem(
-                self, "broadcast", removeprefix(item_id, "!"), "mention", fallback_name
+                self, "broadcast", removeprefix(
+                    item_id, "!"), "mention", fallback_name
             )
         elif item_id.startswith("!date"):
             parts = item_id.split("^")
@@ -838,7 +847,7 @@ class SlackMessage:
         i = 0
         for match in re_ref.finditer(message):
             if i < match.start(0):
-                yield message[i : match.start(0)]
+                yield message[i: match.start(0)]
             yield self._resolve_ref(match["id"], match["fallback_name"])
             i = match.end(0)
 
@@ -865,7 +874,8 @@ class SlackMessage:
             )
             nicks = [user.nick.format() for user in users]
             nicks_extra = (
-                ["and others"] if len(reaction["users"]) < reaction["count"] else []
+                ["and others"] if len(
+                    reaction["users"]) < reaction["count"] else []
             )
             users_str = f"({', '.join(nicks + nicks_extra)})"
         else:
@@ -947,7 +957,8 @@ class SlackMessage:
                     items: List[Union[str, PendingMessageItem]] = []
                     for element in block["elements"]:
                         if element["type"] == "button":
-                            items.extend(self._render_block_element(element["text"]))
+                            items.extend(
+                                self._render_block_element(element["text"]))
                             if "url" in element:
                                 items.append(format_url(element["url"]))
                         else:
@@ -955,7 +966,8 @@ class SlackMessage:
                                 f'<Unsupported block action type "{element["type"]}">'
                             )
                             items.append(
-                                with_color(shared.config.color.render_error.value, text)
+                                with_color(
+                                    shared.config.color.render_error.value, text)
                             )
                     block_lines.append(intersperse(items, " | "))
                 elif block["type"] == "call":
@@ -972,12 +984,14 @@ class SlackMessage:
                     block_lines.append(intersperse(items, " | "))
                 elif block["type"] == "image":
                     if "title" in block:
-                        block_lines.append(self._render_block_element(block["title"]))
+                        block_lines.append(
+                            self._render_block_element(block["title"]))
                     block_lines.append(self._render_block_element(block))
                 elif block["type"] == "rich_text":
                     for element in block.get("elements", []):
                         if element["type"] == "rich_text_section":
-                            rendered = self._render_block_rich_text_section(element)
+                            rendered = self._render_block_rich_text_section(
+                                element)
                             if rendered:
                                 block_lines.append(rendered)
                         elif element["type"] == "rich_text_list":
@@ -1012,7 +1026,8 @@ class SlackMessage:
                                 for sub_element in element["elements"]
                             ]
                             if texts:
-                                block_lines.append([f"```\n{''.join(texts)}\n```"])
+                                block_lines.append(
+                                    [f"```\n{''.join(texts)}\n```"])
                         else:
                             text = f'<Unsupported rich text type "{element["type"]}">'
                             block_lines.append(
@@ -1025,7 +1040,8 @@ class SlackMessage:
                 else:
                     text = f'<Unsupported block type "{block["type"]}">'
                     block_lines.append(
-                        [with_color(shared.config.color.render_error.value, text)]
+                        [with_color(
+                            shared.config.color.render_error.value, text)]
                     )
             except Exception as e:
                 uncaught_error = UncaughtError(e)
@@ -1041,7 +1057,8 @@ class SlackMessage:
         self, section: SlackMessageBlockRichTextSection, lines_prepend: str = ""
     ) -> List[Union[str, PendingMessageItem]]:
         texts: List[Union[str, PendingMessageItem]] = []
-        prev_element: SlackMessageBlockRichTextElement = {"type": "text", "text": ""}
+        prev_element: SlackMessageBlockRichTextElement = {
+            "type": "text", "text": ""}
         for element in section["elements"] + [prev_element.copy()]:
             colors_apply: List[str] = []
             colors_remove: List[str] = []
@@ -1111,6 +1128,8 @@ class SlackMessage:
             rgb_int = int(element["value"].lstrip("#"), 16)
             weechat_color = weechat.info_get("color_rgb2term", str(rgb_int))
             return f"{element['value']} {with_color(weechat_color, '■')}"
+        elif element["type"] == "date":
+            return format_date(element["timestamp"], element["format"])
         elif element["type"] == "channel":
             return PendingMessageItem(self, "conversation", element["channel_id"])
         elif element["type"] == "user":
@@ -1298,13 +1317,15 @@ class SlackMessage:
                     )
                     footer.append(f" | {timestamp_formatted.capitalize()}")
 
-                lines.append([item for item in self._unfurl_and_unescape(footer)])
+                lines.append(
+                    [item for item in self._unfurl_and_unescape(footer)])
 
             fallback = attachment.get("fallback")
             if not any(lines) and fallback and not link_shown:
                 lines.append([fallback])
 
-            items = [item for items in intersperse(lines, ["\n"]) for item in items]
+            items = [item for items in intersperse(
+                lines, ["\n"]) for item in items]
 
             texts_separate_newlines = [
                 item_separate_newline
