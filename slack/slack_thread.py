@@ -15,10 +15,29 @@ if TYPE_CHECKING:
     from slack.slack_workspace import SlackWorkspace
 
 
+class SlackThreadMessages(Mapping[SlackTs, SlackMessage]):
+    def __init__(self, parent: SlackMessage):
+        super().__init__()
+        self._parent = parent
+
+    def __getitem__(self, key: SlackTs) -> SlackMessage:
+        if key == self._parent.ts:
+            return self._parent
+        return self._parent.replies[key]
+
+    def __iter__(self) -> Generator[SlackTs, None, None]:
+        yield self._parent.ts
+        yield from self._parent.replies
+
+    def __len__(self) -> int:
+        return 1 + len(self._parent.replies)
+
+
 class SlackThread(SlackBuffer):
     def __init__(self, parent: SlackMessage) -> None:
         super().__init__()
         self.parent = parent
+        self._messages = SlackThreadMessages(parent)
         self._reply_nicks: Set[Nick] = set()
 
     @property
@@ -41,7 +60,7 @@ class SlackThread(SlackBuffer):
 
     @property
     def messages(self) -> Mapping[SlackTs, SlackMessage]:
-        return self.parent.replies
+        return self._messages
 
     @property
     def last_read(self) -> Optional[SlackTs]:
@@ -84,15 +103,12 @@ class SlackThread(SlackBuffer):
             await self.print_message(message)
 
     async def fill_history(self):
-        if self.history_pending:
+        if self.is_loading:
             return
 
         with self.loading():
-            self.history_pending = True
-
             if self.parent.reply_history_filled and not self.history_needs_refresh:
                 await self.print_history()
-                self.history_pending = False
                 return
 
             messages = await self.parent.conversation.fetch_replies(self.parent.ts)
@@ -114,7 +130,6 @@ class SlackThread(SlackBuffer):
             await self.print_history()
 
             self.history_needs_refresh = False
-            self.history_pending = False
 
     async def print_message(self, message: SlackMessage):
         did_print = await super().print_message(message)

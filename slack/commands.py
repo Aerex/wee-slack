@@ -133,6 +133,14 @@ def list_workspaces(workspace_name: Optional[str] = None, detailed_list: bool = 
 
 def display_workspace(workspace: SlackWorkspace, detailed_list: bool):
     if workspace.is_connected:
+        num_pvs = len(
+            [
+                conversation
+                for conversation in workspace.open_conversations.values()
+                if conversation.buffer_type == "private"
+            ]
+        )
+        num_channels = len(workspace.open_conversations) - num_pvs
         weechat.prnt(
             "",
             f" * "
@@ -141,7 +149,15 @@ def display_workspace(workspace: SlackWorkspace, detailed_list: bool):
             f"connected"
             f"{with_color('chat_delimiters', ']')}"
             f", nick: {workspace.my_user.nick.format()}"
-            f", 0 channel(s), 0 pv",
+            f", {num_channels} channel(s), {num_pvs} pv",
+        )
+    elif workspace.is_connecting:
+        weechat.prnt(
+            "",
+            f"   {with_color('chat_server', workspace.name)} "
+            f"{with_color('chat_delimiters', '[')}"
+            f"connecting"
+            f"{with_color('chat_delimiters', ']')}",
         )
     else:
         weechat.prnt("", f"   {with_color('chat_server', workspace.name)}")

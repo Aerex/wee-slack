@@ -76,6 +76,7 @@ def hash_from_ts(ts: SlackTs) -> str:
 
 class SlackConversationMessageHashes(Dict[SlackTs, str]):
     def __init__(self, conversation: SlackConversation):
+        super().__init__()
         self._conversation = conversation
         self._inverse_map: Dict[str, SlackTs] = {}
 
@@ -339,6 +340,15 @@ class SlackConversation(SlackBuffer):
                 shared.config.color.buflist_muted_conversation.value, short_name
             )
 
+        im_localvars = (
+            {
+                "localvar_set_user_status_emoji": self._im_user.status_emoji,
+                "localvar_set_user_status_text": self._im_user.status_text,
+            }
+            if self._im_user
+            else {}
+        )
+
         return name, {
             "short_name": short_name,
             "title": self.buffer_title(),
@@ -352,6 +362,7 @@ class SlackConversation(SlackBuffer):
             "localvar_set_server": self.workspace.name,
             "localvar_set_slack_muted": "1" if self.muted else "0",
             "localvar_set_completion_default_template": "${weechat.completion.default_template}|%(slack_channels)|%(slack_emojis)",
+            **im_localvars,
         }
 
     async def buffer_switched_to(self):
@@ -457,7 +468,7 @@ class SlackConversation(SlackBuffer):
                     self.hotlist_tss.add(message.latest_reply)
 
     async def fill_history(self, update: bool = False):
-        if self.history_pending:
+        if self.is_loading:
             return
 
         if (
@@ -468,8 +479,6 @@ class SlackConversation(SlackBuffer):
             return
 
         with self.loading():
-            self.history_pending = True
-
             history_after_ts = (
                 next(iter(self._messages), None)
                 if self.history_needs_refresh
@@ -550,7 +559,6 @@ class SlackConversation(SlackBuffer):
                 await self.print_message(message)
 
             self.history_needs_refresh = False
-            self.history_pending = False
 
     async def nicklist_update(self):
         if self.nicklist_needs_refresh and self.type != "im":
@@ -584,8 +592,9 @@ class SlackConversation(SlackBuffer):
     def nicklist_remove_nick(self, nick: Nick):
         if self.type == "im" or self.buffer_pointer is None:
             return
-        nick_pointer = self._nicklist.pop(nick)
-        weechat.nicklist_remove_nick(self.buffer_pointer, nick_pointer)
+        if nick in self._nicklist:
+            nick_pointer = self._nicklist.pop(nick)
+            weechat.nicklist_remove_nick(self.buffer_pointer, nick_pointer)
 
     def display_thread_replies(self) -> bool:
         if self.buffer_pointer is not None:
@@ -617,7 +626,7 @@ class SlackConversation(SlackBuffer):
         self._messages[message.ts] = message
 
         if self.should_display_message(message):
-            if self.history_pending:
+            if self.is_loading:
                 self.history_pending_messages.append(message)
             elif self.last_printed_ts is not None:
                 await self.print_message(message)
@@ -632,7 +641,7 @@ class SlackConversation(SlackBuffer):
             parent_message.replies[message.ts] = message
             thread_buffer = parent_message.thread_buffer
             if thread_buffer:
-                if thread_buffer.history_pending:
+                if thread_buffer.is_loading:
                     thread_buffer.history_pending_messages.append(message)
                 else:
                     await thread_buffer.print_message(message)
