@@ -1577,7 +1577,7 @@ class SlackSubteam(object):
 
 class SlackChannelSection(object):
     """
-    Represents a slack channel section
+    Similar to a thread channel, a virtual channel used to organize channels in a group buffer
     """
 
     def __init__(self, **kwargs):
@@ -2466,6 +2466,10 @@ class SlackChannel(SlackChannelCommon):
             self.set_topic()
             if self.channel_buffer:
                 w.buffer_set(self.channel_buffer, "localvar_set_server", self.team.name)
+            if self.channel_section:
+                w.buffer_set(
+                        self.channel_buffer,
+                        "localvar_set_channel_section", self.channel_section.name)
         self.update_nicklist()
 
         info_method = self.team.slack_api_translator[self.type].get("info")
