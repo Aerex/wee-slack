@@ -327,6 +327,17 @@ class SlackMessageUserProfile(TypedDict):
     is_ultra_restricted: bool
 
 
+@final
+class SlackMessageBotProfile(TypedDict):
+    id: str
+    deleted: bool
+    name: str
+    updated: int
+    app_id: str
+    icons: Dict[str, str]
+    team_id: str
+
+
 class SlackMessageCommon(TypedDict):
     type: Literal["message"]
     text: str
@@ -338,6 +349,8 @@ class SlackMessageStandardCommon(SlackMessageCommon):
     client_msg_id: NotRequired[str]
     user: NotRequired[str]
     user_profile: NotRequired[SlackMessageUserProfile]
+    bot_id: NotRequired[str]
+    bot_profile: NotRequired[SlackMessageBotProfile]
     blocks: List[SlackMessageBlock]
     attachments: NotRequired[List[SlackMessageAttachment]]
     team: NotRequired[str]
@@ -400,6 +413,8 @@ class SlackMessageThreadBroadcastFinal(SlackMessageThreadBroadcast):
 class SlackMessageWithFiles(SlackMessageCommon):
     user: NotRequired[str]
     user_profile: NotRequired[SlackMessageUserProfile]
+    bot_id: NotRequired[str]
+    bot_profile: NotRequired[SlackMessageBotProfile]
     files: List[SlackFile]
     upload: bool
     display_as_bot: bool
@@ -501,6 +516,8 @@ class SlackMessageSubtypeChannelJoin(SlackMessageCommon):
     subtype: Literal["channel_join", "group_join"]
     user: NotRequired[str]
     user_profile: NotRequired[SlackMessageUserProfile]
+    bot_id: NotRequired[str]
+    bot_profile: NotRequired[SlackMessageBotProfile]
     inviter: NotRequired[str]
 
 
@@ -513,6 +530,8 @@ class SlackMessageSubtypeChannelLeave(SlackMessageCommon):
     subtype: Literal["channel_leave", "group_leave"]
     user: NotRequired[str]
     user_profile: NotRequired[SlackMessageUserProfile]
+    bot_id: NotRequired[str]
+    bot_profile: NotRequired[SlackMessageBotProfile]
 
 
 @final
@@ -525,6 +544,8 @@ class SlackMessageSubtypeChannelTopic(SlackMessageCommon):
     topic: str
     user: NotRequired[str]
     user_profile: NotRequired[SlackMessageUserProfile]
+    bot_id: NotRequired[str]
+    bot_profile: NotRequired[SlackMessageBotProfile]
 
 
 @final
