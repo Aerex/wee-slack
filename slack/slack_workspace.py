@@ -37,6 +37,7 @@ from slack.log import DebugMessageType, LogLevel, log, print_error
 from slack.proxy import Proxy
 from slack.shared import shared
 from slack.slack_api import SlackApi
+from slack.slack_buffer import SlackBuffer
 from slack.slack_conversation import SlackConversation
 from slack.slack_message import SlackMessage, SlackTs
 from slack.slack_message_buffer import SlackMessageBuffer
@@ -48,6 +49,7 @@ from slack.weechat_buffer import buffer_new
 
 if TYPE_CHECKING:
     from slack_api.slack_bots_info import SlackBotInfo
+    from slack_api.slack_client_userboot import SlackClientUserbootIm
     from slack_api.slack_usergroups_info import SlackUsergroupInfo
     from slack_api.slack_users_conversations import SlackUsersConversations
     from slack_api.slack_users_info import SlackUserInfo
@@ -226,18 +228,19 @@ class SlackUsergroups(
         return self._item_class(self.workspace, item_info)
 
 
-class SlackWorkspace:
+class SlackWorkspace(SlackBuffer):
     def __init__(self, name: str):
+        super().__init__()
         self.name = name
-        self.buffer_pointer: Optional[str] = None
         self.config = shared.config.create_workspace_config(self.name)
-        self.api = SlackApi(self)
+        self._api = SlackApi(self)
         self._initial_connect = True
         self._is_connected = False
         self._connect_task: Optional[Task[bool]] = None
         self._ws: Optional[WebSocket] = None
         self._hook_ws_fd: Optional[str] = None
         self._last_ws_received_time = time.time()
+        self._last_tickle = time.time()
         self._debug_ws_buffer_pointer: Optional[str] = None
         self._reconnect_url: Optional[str] = None
         self.my_user: SlackUser
@@ -259,6 +262,10 @@ class SlackWorkspace:
     @property
     def workspace(self) -> SlackWorkspace:
         return self
+
+    @property
+    def api(self) -> SlackApi:
+        return self._api
 
     @property
     def token_type(self) -> Literal["oauth", "session", "unknown"]:
@@ -317,7 +324,7 @@ class SlackWorkspace:
         if switch:
             buffer_props["display"] = "1"
 
-        self.buffer_pointer = buffer_new(
+        self._buffer_pointer = buffer_new(
             self.get_full_name(),
             buffer_props,
             self._buffer_input_cb,
@@ -327,11 +334,11 @@ class SlackWorkspace:
         buffer_to_merge_with = workspace_get_buffer_to_merge_with()
         if (
             buffer_to_merge_with
-            and weechat.buffer_get_integer(self.buffer_pointer, "layout_number") < 1
+            and weechat.buffer_get_integer(self._buffer_pointer, "layout_number") < 1
         ):
-            weechat.buffer_merge(self.buffer_pointer, buffer_to_merge_with)
+            weechat.buffer_merge(self._buffer_pointer, buffer_to_merge_with)
 
-        shared.buffers[self.buffer_pointer] = self
+        shared.buffers[self._buffer_pointer] = self
 
     def update_buffer_props(self) -> None:
         if self.buffer_pointer is None:
@@ -466,11 +473,32 @@ class SlackWorkspace:
 
         self.usergroups_member = set(user_boot["subteams"]["self"])
 
-        conversation_counts = (
-            client_counts["channels"] + client_counts["mpims"] + client_counts["ims"]
-        )
+        channel_infos: Dict[str, SlackConversationsInfoInternal] = {
+            channel["id"]: channel for channel in user_boot["channels"]
+        }
 
-        conversation_ids = set(
+        channel_counts = client_counts["channels"] + client_counts["mpims"]
+
+        for channel_count in channel_counts:
+            if channel_count["id"] in channel_infos:
+                channel_infos[channel_count["id"]]["last_read"] = channel_count[
+                    "last_read"
+                ]
+
+        im_infos: Dict[str, SlackClientUserbootIm] = {
+            im["id"]: im for im in user_boot["ims"]
+        }
+
+        for im in im_infos.values():
+            # latest is incorrectly set to the current timestamp for all conversations, so delete it
+            del im["latest"]
+
+        for im_count in client_counts["ims"]:
+            if im_count["id"] in im_infos:
+                im_infos[im_count["id"]]["last_read"] = im_count["last_read"]
+                im_infos[im_count["id"]]["latest"] = im_count["latest"]
+
+        channel_ids = set(
             [
                 channel["id"]
                 for channel in user_boot["channels"]
@@ -482,36 +510,29 @@ class SlackWorkspace:
                     or self.id in channel["internal_team_ids"]
                 )
             ]
-            + user_boot["is_open"]
-            + [count["id"] for count in conversation_counts if count["has_unreads"]]
+            + [count["id"] for count in channel_counts if count["has_unreads"]]
         )
 
-        conversation_counts_ids = set(count["id"] for count in conversation_counts)
-        if not conversation_ids.issubset(conversation_counts_ids):
-            raise SlackError(
-                self,
-                "Unexpectedly missing some conversations in client.counts",
-                {
-                    "conversation_ids": list(conversation_ids),
-                    "conversation_counts_ids": list(conversation_counts_ids),
-                },
-            )
+        im_ids = set(
+            [
+                im["id"]
+                for im in user_boot["ims"]
+                if "latest" in im and SlackTs(im["last_read"]) < SlackTs(im["latest"])
+            ]
+            + user_boot["is_open"]
+            + [count["id"] for count in client_counts["ims"] if count["has_unreads"]]
+        )
 
-        channel_infos: Dict[str, SlackConversationsInfoInternal] = {
-            channel["id"]: channel for channel in user_boot["channels"]
-        }
-        self.conversations.initialize_items(conversation_ids, channel_infos)
+        conversation_ids = channel_ids | im_ids
+        self.conversations.initialize_items(
+            conversation_ids, {**channel_infos, **im_infos}
+        )
         conversations = {
             conversation_id: await self.conversations[conversation_id]
             for conversation_id in conversation_ids
         }
 
-        for conversation_count in conversation_counts:
-            if conversation_count["id"] in conversations:
-                conversation = conversations[conversation_count["id"]]
-                # TODO: Update without moving unread marker to the bottom
-                if conversation.last_read == SlackTs("0.0"):
-                    conversation.last_read = SlackTs(conversation_count["last_read"])
+        # TODO: Update last_read and other info on reconnect
 
         return list(conversations.values())
 
@@ -556,7 +577,7 @@ class SlackWorkspace:
                 history = await self.api.fetch_conversations_history(conversation)
             else:
                 history = await self.api.fetch_conversations_history_after(
-                    conversation, conversation.last_read
+                    conversation, conversation.last_read, inclusive=False
                 )
             if not history["messages"]:
                 return
@@ -720,6 +741,7 @@ class SlackWorkspace:
                     "file_shared",
                     "file_deleted",
                     "dnd_updated_user",
+                    "pong",
                 ]:
                     log(
                         LogLevel.DEBUG,
@@ -825,6 +847,16 @@ class SlackWorkspace:
             slack_error = SlackRtmError(self, e, data)
             print_error(store_and_format_exception(slack_error))
 
+    def ws_send(self, msg: object):
+        if not self.is_connected:
+            raise SlackError(self, "Can't send to ws when not connected")
+        if self._ws is None:
+            raise SlackError(self, "is_connected is True while _ws is None")
+
+        data = json.dumps(msg)
+        log(LogLevel.DEBUG, DebugMessageType.WEBSOCKET_SEND, data)
+        self._ws.send(data)
+
     def _set_muted_channels(self, muted_channels: Set[str]):
         changed_channels = self.muted_channels ^ muted_channels
         self.muted_channels = muted_channels
@@ -845,25 +877,24 @@ class SlackWorkspace:
             return
 
         try:
-            self._ws.ping()
-            # workspace.last_ping_time = time.time()
+            self.ws_send({"type": "ping"})
         except (WebSocketConnectionClosedException, socket.error):
             print("lost connection on ping, reconnecting")
             run_async(self.reconnect())
 
-    def send_typing(self, buffer: SlackMessageBuffer):
-        if not self.is_connected:
-            raise SlackError(self, "Can't send typing when not connected")
-        if self._ws is None:
-            raise SlackError(self, "is_connected is True while _ws is None")
+    def tickle(self, force: bool = False):
+        if force or time.time() - self._last_tickle >= 20:
+            self.ws_send({"type": "tickle"})
+            self._last_tickle = time.time()
 
+    def send_typing(self, buffer: SlackMessageBuffer):
         msg = {
             "type": "user_typing",
             "channel": buffer.conversation.id,
         }
         if isinstance(buffer, SlackThread):
             msg["thread_ts"] = buffer.parent.ts
-        self._ws.send(json.dumps(msg))
+        self.ws_send(msg)
 
     async def reconnect(self):
         self.disconnect()
@@ -913,5 +944,5 @@ class SlackWorkspace:
         if self.buffer_pointer in shared.buffers:
             del shared.buffers[self.buffer_pointer]
 
-        self.buffer_pointer = None
+        self._buffer_pointer = None
         self._initial_connect = True

@@ -210,13 +210,13 @@ class SlackApi(SlackApiCommon):
         return response
 
     async def fetch_conversations_history_after(
-        self, conversation: SlackConversation, after: SlackTs
+        self, conversation: SlackConversation, oldest: SlackTs, inclusive: bool
     ):
         method = "conversations.history"
         params: Params = {
             "channel": conversation.id,
-            "oldest": after,
-            "inclusive": False,
+            "oldest": oldest,
+            "inclusive": inclusive,
         }
         response: SlackConversationsHistoryResponse = await self._fetch_list(
             method, "messages", params
@@ -456,6 +456,26 @@ class SlackApi(SlackApiCommon):
             "ts": ts,
             "read": 1,
         }
+        response: SlackGenericResponse = await self._fetch(method, params)
+        if response["ok"] is False:
+            raise SlackApiError(self.workspace, method, response, params)
+        return response
+
+    async def chat_command(
+        self,
+        conversation: SlackConversation,
+        command: str,
+        text: str,
+        thread_ts: Optional[SlackTs] = None,
+    ):
+        method = "chat.command"
+        params: Params = {
+            "channel": conversation.id,
+            "command": command,
+            "text": text,
+        }
+        if thread_ts is not None:
+            params["thread_ts"] = thread_ts
         response: SlackGenericResponse = await self._fetch(method, params)
         if response["ok"] is False:
             raise SlackApiError(self.workspace, method, response, params)

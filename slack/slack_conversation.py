@@ -414,7 +414,19 @@ class SlackConversation(SlackMessageBuffer):
         self.workspace.users.initialize_items(self._members)
         return self._members
 
-    async def fetch_replies(self, thread_ts: SlackTs) -> List[SlackMessage]:
+    async def fetch_replies(
+        self, thread_ts: SlackTs
+    ) -> Tuple[SlackMessage, List[SlackMessage]]:
+        parent_message = self.messages.get(thread_ts)
+        if (
+            parent_message
+            and parent_message.reply_history_filled
+            and not self.history_needs_refresh
+        ):
+            return parent_message, [
+                self.messages[ts] for ts in parent_message.replies_tss
+            ]
+
         replies_response = await self.api.fetch_conversations_replies(self, thread_ts)
         messages = [
             SlackMessage(self, message) for message in replies_response["messages"]
@@ -438,7 +450,19 @@ class SlackConversation(SlackMessageBuffer):
         self._messages = OrderedDict(sorted(self._messages.items()))
 
         parent_message.reply_history_filled = True
-        return replies
+        return parent_message, replies
+
+    async def fetch_history(self, all_current_messages: bool):
+        if self._messages and all_current_messages:
+            return await self.api.fetch_conversations_history_after(
+                self, next(iter(self._messages)), inclusive=True
+            )
+        elif self.last_printed_ts is not None and not all_current_messages:
+            return await self.api.fetch_conversations_history_after(
+                self, self.last_printed_ts, inclusive=False
+            )
+        else:
+            return await self.api.fetch_conversations_history(self)
 
     async def set_hotlist(self):
         if self.last_printed_ts is not None:
@@ -448,21 +472,14 @@ class SlackConversation(SlackMessageBuffer):
             await self.fill_history()
             return
 
-        if self.last_printed_ts is not None:
-            history_after_ts = (
-                next(iter(self._messages))
-                if self.display_thread_replies()
-                else self.last_printed_ts
-            )
-            history = await self.api.fetch_conversations_history_after(
-                self, history_after_ts
-            )
-        else:
-            history = await self.api.fetch_conversations_history(self)
+        history = await self.fetch_history(
+            all_current_messages=self.display_thread_replies()
+        )
 
         if self.buffer_pointer and shared.current_buffer_pointer != self.buffer_pointer:
             for message_json in history["messages"]:
                 message = SlackMessage(self, message_json)
+                self._add_or_update_message(message)
                 if message.ts > self.last_read and message.ts not in self.hotlist_tss:
                     priority = message.priority(self.context).value
                     weechat.buffer_set(self.buffer_pointer,
@@ -487,6 +504,7 @@ class SlackConversation(SlackMessageBuffer):
                     weechat.buffer_set(self.buffer_pointer,
                                        "hotlist", priority.value)
                     self.hotlist_tss.add(message.latest_reply)
+                await message.handle_thread_notify_and_auto_open()
 
     async def fill_history(self, update: bool = False):
         if self.is_loading:
@@ -500,18 +518,9 @@ class SlackConversation(SlackMessageBuffer):
             return
 
         with self.loading():
-            history_after_ts = (
-                next(iter(self._messages), None)
-                if self.history_needs_refresh
-                else self.last_printed_ts
+            history = await self.fetch_history(
+                all_current_messages=self.history_needs_refresh
             )
-            if history_after_ts:
-                history = await self.api.fetch_conversations_history_after(
-                    self, history_after_ts
-                )
-            else:
-                history = await self.api.fetch_conversations_history(self)
-
             conversation_messages = [
                 SlackMessage(self, message) for message in history["messages"]
             ]
@@ -573,6 +582,7 @@ class SlackConversation(SlackMessageBuffer):
 
             for message in messages:
                 await self.print_message(message)
+                await message.handle_thread_notify_and_auto_open()
 
             while self.history_pending_messages:
                 message = self.history_pending_messages.pop(0)
@@ -616,6 +626,52 @@ class SlackConversation(SlackMessageBuffer):
             nick_pointer = self._nicklist.pop(nick)
             weechat.nicklist_remove_nick(self.buffer_pointer, nick_pointer)
 
+    def _auto_open_threads(self) -> bool:
+        if self.buffer_pointer is not None:
+            buffer_value = weechat.buffer_get_string(
+                self.buffer_pointer,
+                "localvar_auto_open_threads",
+            )
+            if buffer_value:
+                return bool(weechat.config_string_to_boolean(buffer_value))
+        return self.workspace.config.auto_open_threads.value
+
+    def _auto_open_threads_only_if_replies_not_in_channel(self) -> bool:
+        if self.buffer_pointer is not None:
+            buffer_value = weechat.buffer_get_string(
+                self.buffer_pointer,
+                "localvar_auto_open_threads_only_if_replies_not_in_channel",
+            )
+            if buffer_value:
+                return bool(weechat.config_string_to_boolean(buffer_value))
+        return (
+            self.workspace.config.auto_open_threads_only_if_replies_not_in_channel.value
+        )
+
+    def auto_open_threads(self) -> bool:
+        return self._auto_open_threads() and (
+            not self._auto_open_threads_only_if_replies_not_in_channel()
+            or not self.display_thread_replies()
+        )
+
+    def auto_open_threads_only_subscribed(self) -> bool:
+        if self.buffer_pointer is not None:
+            buffer_value = weechat.buffer_get_string(
+                self.buffer_pointer, "localvar_auto_open_threads_only_subscribed"
+            )
+            if buffer_value:
+                return bool(weechat.config_string_to_boolean(buffer_value))
+        return self.workspace.config.auto_open_threads_only_subscribed.value
+
+    def auto_open_threads_only_unread(self) -> bool:
+        if self.buffer_pointer is not None:
+            buffer_value = weechat.buffer_get_string(
+                self.buffer_pointer, "localvar_auto_open_threads_only_unread"
+            )
+            if buffer_value:
+                return bool(weechat.config_string_to_boolean(buffer_value))
+        return self.workspace.config.auto_open_threads_only_unread.value
+
     def display_thread_replies(self) -> bool:
         if self.buffer_pointer is not None:
             buffer_value = weechat.buffer_get_string(
@@ -655,8 +711,12 @@ class SlackConversation(SlackMessageBuffer):
                     thread_buffer.history_pending_messages.append(message)
                 else:
                     await thread_buffer.print_message(message)
+
         elif message.thread_ts is not None:
-            await self.fetch_replies(message.thread_ts)
+            parent_message, _ = await self.fetch_replies(message.thread_ts)
+
+        if parent_message:
+            await parent_message.handle_thread_notify_and_auto_open()
 
         if self.should_display_message(message):
             if self.is_loading:
@@ -756,6 +816,8 @@ class SlackConversation(SlackMessageBuffer):
             if thread_message.thread_buffer is None:
                 thread_message.thread_buffer = SlackThread(thread_message)
             await thread_message.thread_buffer.open_buffer(switch)
+            if not switch:
+                await thread_message.thread_buffer.fill_history()
 
     async def print_message(self, message: SlackMessage):
         did_print = await super().print_message(message)

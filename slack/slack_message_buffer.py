@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 import time
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from contextlib import contextmanager
 from typing import (
     TYPE_CHECKING,
@@ -26,6 +26,7 @@ from slack.shared import (
     REACTION_CHANGE_REGEX_STRING,
     shared,
 )
+from slack.slack_buffer import SlackBuffer
 from slack.slack_message import MessageContext, SlackMessage, SlackTs, ts_from_tag
 from slack.slack_user import Nick
 from slack.task import gather, run_async
@@ -35,9 +36,7 @@ from slack.weechat_buffer import buffer_new
 if TYPE_CHECKING:
     from typing_extensions import Literal, assert_never
 
-    from slack.slack_api import SlackApi
     from slack.slack_conversation import SlackConversation
-    from slack.slack_workspace import SlackWorkspace
 
 
 def hdata_line_ts(line_pointer: str) -> Optional[SlackTs]:
@@ -142,7 +141,7 @@ def modify_buffer_line(buffer_pointer: str, ts: SlackTs, new_text: str):
             weechat.buffer_set(buffer_pointer, "print_hooks_enabled", "1")
     else:
         # Split the message into at most the number of existing lines as we can't insert new lines
-        lines = new_text.split("\n", len(pointers) - 1)
+        lines = new_text.split("\n", maxsplit=len(pointers) - 1)
         # Replace newlines to prevent garbled lines in bare display mode
         lines = [line.replace("\n", " | ") for line in lines]
 
@@ -157,11 +156,11 @@ def modify_buffer_line(buffer_pointer: str, ts: SlackTs, new_text: str):
     return True
 
 
-class SlackMessageBuffer(ABC):
+class SlackMessageBuffer(SlackBuffer):
     def __init__(self):
+        super().__init__()
         self._typing_self_last_sent = 0
         self._should_update_server_on_buffer_close = None
-        self.buffer_pointer: Optional[str] = None
         self.is_loading = False
         self.history_pending_messages: List[SlackMessage] = []
         self.history_needs_refresh = False
@@ -176,10 +175,6 @@ class SlackMessageBuffer(ABC):
         ] = "NO_COMPLETION"
         self.completion_values: List[str] = []
         self.completion_index = 0
-
-    @property
-    def api(self) -> SlackApi:
-        return self.workspace.api
 
     @contextmanager
     def loading(self):
@@ -198,11 +193,6 @@ class SlackMessageBuffer(ABC):
             yield
         finally:
             self.completion_context = "ACTIVE_COMPLETION"
-
-    @property
-    @abstractmethod
-    def workspace(self) -> SlackWorkspace:
-        raise NotImplementedError()
 
     @property
     @abstractmethod
@@ -226,7 +216,7 @@ class SlackMessageBuffer(ABC):
 
     @property
     @abstractmethod
-    def last_read(self) -> Optional[SlackTs]:
+    def last_read(self) -> SlackTs:
         raise NotImplementedError()
 
     @abstractmethod
@@ -257,14 +247,14 @@ class SlackMessageBuffer(ABC):
         if switch:
             buffer_props["display"] = "1"
 
-        self.buffer_pointer = buffer_new(
+        self._buffer_pointer = buffer_new(
             full_name,
             buffer_props,
             self._buffer_input_cb,
             self._buffer_close_cb,
         )
 
-        shared.buffers[self.buffer_pointer] = self
+        shared.buffers[self._buffer_pointer] = self
         if switch:
             await self.buffer_switched_to()
 
@@ -330,6 +320,9 @@ class SlackMessageBuffer(ABC):
             self._typing_self_last_sent = now
             self.workspace.send_typing(self)
 
+    def should_display_message(self, message: SlackMessage) -> bool:
+        return True
+
     async def print_message(self, message: SlackMessage):
         if not self.buffer_pointer:
             return False
@@ -340,12 +333,13 @@ class SlackMessageBuffer(ABC):
                 self.buffer_pointer, message.ts, new_text)
             if not did_update:
                 print_error(
-                    f"Didn't find message with ts {message.ts} when last_printed_ts is {self.last_printed_ts}, message: {message}"
+                    f"Didn't find message with ts {message.ts} when last_printed_ts is {
+                        self.last_printed_ts}, message: {message}"
                 )
             return False
 
         rendered = await message.render(self.context)
-        backlog = self.last_read is not None and message.ts <= self.last_read
+        backlog = message.ts <= self.last_read
         tags = await message.tags(self.context, backlog)
         if message.ts in self.hotlist_tss:
             tags += ",notify_none"
@@ -383,7 +377,11 @@ class SlackMessageBuffer(ABC):
 
     def set_unread_and_hotlist(self):
         if self.buffer_pointer:
-            # TODO: Move unread marker to correct position according to last_read for WeeChat >= 4.0.0
+            if self.last_read < self.last_printed_ts:
+                # TODO: Move unread marker to correct position according to last_read for WeeChat >= 4.0.0
+                # TODO: Set hotlist correctly if last_read isn't the last message
+                return
+
             weechat.buffer_set(self.buffer_pointer, "unread", "")
             weechat.buffer_set(self.buffer_pointer, "hotlist", "-1")
             self.hotlist_tss.clear()
@@ -446,12 +444,26 @@ class SlackMessageBuffer(ABC):
         self,
         text: str,
         thread_ts: Optional[SlackTs] = None,
-        broadcast: bool = False,
+        # The API doesn't support broadcast for /me messages, so ensure only
+        # either broadcast or me_message is set
+        message_type: Literal["standard",
+                              "broadcast", "me_message"] = "standard",
     ):
         linkified_text = await self.linkify_text(text)
-        await self.api.chat_post_message(
-            self.conversation, linkified_text, thread_ts, broadcast
-        )
+        if message_type == "me_message":
+            await self.api.chat_command(
+                conversation=self.conversation,
+                command="/me",
+                text=linkified_text,
+                thread_ts=thread_ts,
+            )
+        else:
+            await self.api.chat_post_message(
+                conversation=self.conversation,
+                text=linkified_text,
+                thread_ts=thread_ts,
+                broadcast=message_type == "broadcast",
+            )
 
     async def send_change_reaction(
         self, ts: SlackTs, emoji_char: str, change_type: Literal["+", "-", "toggle"]
@@ -479,7 +491,8 @@ class SlackMessageBuffer(ABC):
             f |= re.DOTALL if "s" in flags else 0
             old_message_text = message.text
             new_message_text = re.sub(
-                old, new, old_message_text, num_replace, f)
+                old, new, old_message_text, count=num_replace, flags=f
+            )
             if new_message_text != old_message_text:
                 await self.api.chat_update_message(
                     self.conversation, message.ts, new_message_text
@@ -514,7 +527,8 @@ class SlackMessageBuffer(ABC):
 
     async def process_input(self, input_data: str):
         special = re.match(
-            rf"{MESSAGE_ID_REGEX_STRING}?(?:{REACTION_CHANGE_REGEX_STRING}{EMOJI_CHAR_OR_NAME_REGEX_STRING}\s*|s/)",
+            rf"{MESSAGE_ID_REGEX_STRING}?(?:{REACTION_CHANGE_REGEX_STRING}{
+                EMOJI_CHAR_OR_NAME_REGEX_STRING}\s*|s/)",
             input_data,
         )
         if special:
@@ -577,6 +591,6 @@ class SlackMessageBuffer(ABC):
         if call_buffer_close and self.buffer_pointer is not None:
             weechat.buffer_close(self.buffer_pointer)
 
-        self.buffer_pointer = None
+        self._buffer_pointer = None
         self.last_printed_ts = None
         self.hotlist_tss.clear()

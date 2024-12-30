@@ -9,6 +9,8 @@ from slack.slack_user import Nick
 from slack.task import gather
 
 if TYPE_CHECKING:
+    from typing_extensions import Literal
+
     from slack.slack_conversation import SlackConversation
     from slack.slack_workspace import SlackWorkspace
 
@@ -42,7 +44,7 @@ class SlackThread(SlackMessageBuffer):
         return self.parent.replies
 
     @property
-    def last_read(self) -> Optional[SlackTs]:
+    def last_read(self) -> SlackTs:
         return self.parent.last_read
 
     def get_name_and_buffer_props(self) -> Tuple[str, Dict[str, str]]:
@@ -92,7 +94,7 @@ class SlackThread(SlackMessageBuffer):
                 await self.print_history()
                 return
 
-            messages = await self.parent.conversation.fetch_replies(self.parent.ts)
+            _, messages = await self.parent.conversation.fetch_replies(self.parent.ts)
 
             if self.history_needs_refresh:
                 await self.rerender_history()
@@ -126,8 +128,8 @@ class SlackThread(SlackMessageBuffer):
         if self.workspace.token_type != "session":
             return
 
-        # last_read can only be set if it exists (which is on threads you're subscribed to)
-        if self.last_read is None:
+        # last_read can only be set on subscribed threads
+        if not self.parent.subscribed:
             return
 
         last_read_line_ts = self.last_read_line_ts()
@@ -140,6 +142,12 @@ class SlackThread(SlackMessageBuffer):
         self,
         text: str,
         thread_ts: Optional[SlackTs] = None,
-        broadcast: bool = False,
+        # The API doesn't support broadcast for /me messages, so ensure only
+        # either broadcast or me_message is set
+        message_type: Literal["standard", "broadcast", "me_message"] = "standard",
     ):
-        await super().post_message(text, thread_ts or self.parent.ts, broadcast)
+        await super().post_message(
+            text=text,
+            thread_ts=thread_ts or self.parent.ts,
+            message_type=message_type,
+        )

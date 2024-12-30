@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable, Optional
+from typing import TYPE_CHECKING, Callable, Optional, Tuple
 
 import weechat
 
@@ -140,6 +140,14 @@ class SlackConfigSectionColor:
             WeeChatColor("blue"),
         )
 
+        self.user_mention_nick_color = WeeChatOption(
+            self._section,
+            "user_mention_nick_color",
+            "",
+            False,
+            callback_change=self.config_change_user_mention_nick_color_cb,
+        )
+
         self.usergroup_mention = WeeChatOption(
             self._section,
             "usergroup_mention",
@@ -151,6 +159,11 @@ class SlackConfigSectionColor:
         self, option: WeeChatOption[WeeChatOptionType], parent_changed: bool
     ):
         update_buffer_props()
+
+    def config_change_user_mention_nick_color_cb(
+        self, option: WeeChatOption[WeeChatOptionType], parent_changed: bool
+    ):
+        self.user_mention.enabled = not option.value
 
 
 class SlackConfigSectionLook:
@@ -187,7 +200,7 @@ class SlackConfigSectionLook:
             "color_message_attachments",
             "colorize attachments in a message: prefix = only colorize the prefix, all = colorize the whole line, none = don't colorize",
             "prefix",
-            string_values=["prefix", "all", "none"],
+            string_values=("prefix", "all", "none"),
         )
 
         self.display_link_previews: WeeChatOption[
@@ -197,7 +210,7 @@ class SlackConfigSectionLook:
             "display_link_previews",
             "display previews of URLs in messages: always = always display, only_internal = only display for URLs to messages in the workspace, never = never display",
             "always",
-            string_values=["always", "only_internal", "never"],
+            string_values=("always", "only_internal", "never"),
         )
 
         self.display_reaction_nicks = WeeChatOption(
@@ -235,7 +248,17 @@ class SlackConfigSectionLook:
             "muted_conversations_notify",
             "notify level to set for messages in muted conversations; none: don't notify for any messages; personal_highlights: only notify for personal highlights, i.e. not @channel and @here; all_highlights: notify for all highlights, but not other messages; all: notify for all messages, like other channels; note that this doesn't affect messages in threads you are subscribed to or in open thread buffers, those will always notify",
             "personal_highlights",
-            string_values=["none", "personal_highlights", "all_highlights", "all"],
+            string_values=("none", "personal_highlights", "all_highlights", "all"),
+        )
+
+        self.notify_subscribed_threads: WeeChatOption[
+            Literal["auto", "unless_thread_buffer", "always", "never"]
+        ] = WeeChatOption(
+            self._section,
+            "notify_subscribed_threads",
+            "send a message to the workspace buffer to notify you of new messages in threads you are subscribed to: auto = only notify if the thread buffer is not open and display_thread_replies_in_channel for the channel is false, unless_thread_buffer = only notify if the thread buffer is not open, always = always notify, never = never notify",
+            "auto",
+            string_values=("auto", "unless_thread_buffer", "always", "never"),
         )
 
         self.part_closes_buffer = WeeChatOption(
@@ -252,7 +275,7 @@ class SlackConfigSectionLook:
                 "render_emoji_as",
                 "show emojis as: emoji = the emoji unicode character, name = the emoji name, both = both the emoji name and the emoji character",
                 "emoji",
-                string_values=["emoji", "name", "both"],
+                string_values=("emoji", "name", "both"),
             )
         )
 
@@ -277,7 +300,7 @@ class SlackConfigSectionLook:
             "workspace_buffer",
             "merge workspace buffers; this option has no effect if a layout is saved and is conflicting with this value (see /help layout)",
             "merge_with_core",
-            string_values=["merge_with_core", "merge_without_core", "independent"],
+            string_values=("merge_with_core", "merge_without_core", "independent"),
             parent_option="irc.look.server_buffer",
             callback_change=self.config_change_workspace_buffer_cb,
         )
@@ -358,10 +381,43 @@ class SlackConfigSectionWorkspace:
             evaluate_func=self._evaluate_with_workspace_name,
         )
 
+        self.auto_open_threads = self._create_option(
+            "auto_open_threads",
+            "automatically open thread buffers; see the other options starting with auto_open_threads for which threads to open; can be overridden per buffer with the buffer localvar auto_open_threads",
+            False,
+        )
+
+        self.auto_open_threads_only_if_replies_not_in_channel = self._create_option(
+            "auto_open_threads_only_if_replies_not_in_channel",
+            "limit automatically opening threads to only threads in conversations where display_thread_replies_in_channel is disabled; can be overridden per buffer with the buffer localvar auto_open_threads_only_if_replies_not_in_channel",
+            True,
+        )
+
+        self.auto_open_threads_only_subscribed = self._create_option(
+            "auto_open_threads_only_subscribed",
+            "limit automatically opening threads to only subscribed threads; note that only subscribed threads have a read status on the server, so on script load all messages in unsubscribed threads will be considered read; can be overridden per buffer with the buffer localvar auto_open_threads_only_subscribed",
+            True,
+        )
+
+        self.auto_open_threads_only_unread = self._create_option(
+            "auto_open_threads_only_unread",
+            "limit automatically opening threads to only unread threads; note that only subscribed threads have a read status on the server, so this option only applies to subscribed threads; can be overridden per buffer with the buffer localvar auto_open_threads_only_unread",
+            True,
+        )
+
         self.autoconnect = self._create_option(
             "autoconnect",
             "automatically connect to workspace when WeeChat is starting",
             False,
+        )
+
+        self.keep_active: WeeChatOption[Literal["on_activity", "always"]] = (
+            self._create_option(
+                "keep_active",
+                "keep your presence set to active: on_activity = set active when you interact with WeeChat (Slack sets you away after 30 minutes of inactivity), always = remain active as long as you're connected to the workspace",
+                "on_activity",
+                string_values=("on_activity", "always"),
+            )
         )
 
         self.network_timeout = self._create_option(
@@ -370,12 +426,13 @@ class SlackConfigSectionWorkspace:
             30,
         )
 
-        self.use_real_names = self._create_option(
-            "use_real_names",
-            "use real names as the nicks for all users. When this is"
-            " false, display names will be used if set, with a fallback"
-            " to the real name if display name is not set",
-            False,
+        self.nick_source: WeeChatOption[
+            Literal["display_name", "real_name", "username"]
+        ] = self._create_option(
+            "nick_source",
+            "property from the user profile to use as the nick",
+            "display_name",
+            string_values=("display_name", "real_name", "username"),
         )
 
     def _evaluate_with_workspace_name(self, value: str) -> str:
@@ -390,7 +447,7 @@ class SlackConfigSectionWorkspace:
         default_value: WeeChatOptionType,
         min_value: Optional[int] = None,
         max_value: Optional[int] = None,
-        string_values: Optional[list[WeeChatOptionType]] = None,
+        string_values: Tuple[WeeChatOptionType, ...] = (),
         evaluate_func: Optional[
             Callable[[WeeChatOptionType], WeeChatOptionType]
         ] = None,
@@ -421,7 +478,7 @@ class SlackConfigSectionWorkspace:
 def config_section_workspace_read_cb(
     data: str, config_file: str, section: str, option_name: str, value: Optional[str]
 ) -> int:
-    option_split = option_name.split(".", 1)
+    option_split = option_name.split(".", maxsplit=1)
     if len(option_split) < 2:
         return weechat.WEECHAT_CONFIG_OPTION_SET_ERROR
     workspace_name, name = option_split
@@ -458,15 +515,16 @@ def config_section_workspace_write_for_old_weechat_cb(
 
     for workspace in shared.workspaces.values():
         for option in vars(workspace.config).values():
-            if isinstance(option, WeeChatOption):
-                if option.weechat_type != "string" or not weechat.config_option_is_null(
-                    option._pointer  # pyright: ignore [reportPrivateUsage]
-                ):
-                    if not weechat.config_write_option(
-                        config_file,
-                        option._pointer,  # pyright: ignore [reportPrivateUsage]
-                    ):
-                        return weechat.WEECHAT_CONFIG_WRITE_ERROR
+            if (
+                isinstance(option, WeeChatOption)
+                and option.pointer is not None
+                and (
+                    option.weechat_type != "string"
+                    or not weechat.config_option_is_null(option.pointer)
+                )
+            ):
+                if not weechat.config_write_option(config_file, option.pointer):
+                    return weechat.WEECHAT_CONFIG_WRITE_ERROR
 
     return weechat.WEECHAT_CONFIG_WRITE_OK
 
