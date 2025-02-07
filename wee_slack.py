@@ -1583,16 +1583,37 @@ class SlackChannelSection(object):
     def __init__(self, **kwargs):
         self.identifier = kwargs["channel_section_id"]
         self.name = kwargs["name"]
-        self.type = kwargs["type"]
+        self.type = "channel_section"
         self.emoji = kwargs.get("emoji", "")
         self.next_channel_section_id = kwargs["next_channel_section_id"]
         self.channel_ids = kwargs["channel_ids_page"]["channel_ids"]
+        self.section_buffer = None
+        self.create_buffer()
 
     def __repr__(self):
         return "Name:{} Identifier:{}".format(self.name, self.identifier)
 
     def __eq__(self, compare_str):
         return compare_str == self.identifier
+
+    def create_buffer(self):
+        if not self.section_buffer:
+            self.section_buffer = w.buffer_new(
+                self.name, "", "", "closed_channel_section_buffer_cb", ""
+            )
+
+            w.buffer_set(
+                self.section_buffer, "localvar_set_type", get_localvar_type(
+                    self.type)
+            )
+            w.buffer_set(
+                    self.section_buffer, "localvar_set_channel_section", self.name)
+
+            w.buffer_set(
+                self.section_buffer,
+                "localvar_set_channel_ids", ",".join(self.channel_ids))
+            w.buffer_set(self.section_buffer,
+                         "localvar_set_slack_type", self.type)
 
 
 class SlackTeam(object):
@@ -2469,9 +2490,13 @@ class SlackChannel(SlackChannelCommon):
             if self.channel_buffer:
                 w.buffer_set(self.channel_buffer, "localvar_set_server", self.team.name)
             if self.channel_section:
+                channel_section_number = w.buffer_get_integer(
+                    self.channel_section.section_buffer, "number")
                 w.buffer_set(
-                        self.channel_buffer,
-                        "localvar_set_channel_section", self.channel_section.name)
+                    self.channel_buffer,
+                    "localvar_set_channel_section", self.channel_section.name)
+                w.buffer_set(self.channel_buffer, "number", str(channel_section_number+1))
+
         self.update_nicklist()
 
         info_method = self.team.slack_api_translator[self.type].get("info")
@@ -7383,9 +7408,12 @@ def create_team(token, initial_data):
 
             channel_sections = {}
             for channel_section in initial_data["channel_sections"]:
+                # create a channel section is there is at least one channel in the section 
+                if len(channel_section["channel_ids_page"]["channel_ids"]) > 0:
+                    section = SlackChannelSection(**channel_section)
                 for channel_id in channel_section["channel_ids_page"]["channel_ids"]:
-                    channel_sections[channel_id] = SlackChannelSection(
-                        **channel_section)
+                    if channel_id not in channel_sections:
+                        channel_sections[channel_id] = section
 
             channels = {}
             for channel_info in initial_data["channels"]:
