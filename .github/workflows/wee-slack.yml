@@ -13,24 +13,24 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
+        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13"]
 
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - uses: abatilo/actions-poetry@v3
+      - uses: astral-sh/setup-uv@v5
 
-      - run: poetry install
+      - run: uv sync --locked
 
-      - run: poetry run ruff format --check
+      - run: uv run ruff format --check
 
-      - run: poetry run ruff check
+      - run: uv run ruff check
 
-      - run: poetry run pyright
+      - run: uv run pyright
 
-      - run: poetry run pytest tests
+      - run: uv run pytest tests
 
   build:
     if: >
@@ -44,11 +44,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - uses: abatilo/actions-poetry@v3
-      - run: poetry install
+      - uses: astral-sh/setup-uv@v5
+
+      - run: uv sync --locked
 
       - name: Install WeeChat, tmux and python3-websocket
         run: |
