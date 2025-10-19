@@ -74,8 +74,7 @@ async def create_conversation_for_users(
     conversation_open_response = await workspace.api.conversations_open(user_ids)
     conversation_id = conversation_open_response["channel"]["id"]
     workspace.conversations.initialize_items(
-        [conversation_id], {
-            conversation_id: conversation_open_response["channel"]}
+        [conversation_id], {conversation_id: conversation_open_response["channel"]}
     )
     conversation = await workspace.conversations[conversation_id]
     await conversation.open_buffer(switch=True)
@@ -283,8 +282,7 @@ class SlackConversation(SlackMessageBuffer):
 
     def _add_or_update_message(self, message: SlackMessage):
         if message.ts in self._messages:
-            self._messages[message.ts].update_message_json(
-                message.message_json)
+            self._messages[message.ts].update_message_json(message.message_json)
         else:
             self._messages[message.ts] = message
 
@@ -301,8 +299,7 @@ class SlackConversation(SlackMessageBuffer):
         if self._im_user is not None:
             return self._im_user.nick.format()
         elif self._info["is_im"] is True:
-            raise SlackError(
-                self.workspace, "IM conversation without _im_user set")
+            raise SlackError(self.workspace, "IM conversation without _im_user set")
         elif self._mpim_users is not None:
             return ",".join(sorted(user.nick.format() for user in self._mpim_users))
         else:
@@ -482,8 +479,7 @@ class SlackConversation(SlackMessageBuffer):
                 self._add_or_update_message(message)
                 if message.ts > self.last_read and message.ts not in self.hotlist_tss:
                     priority = message.priority(self.context).value
-                    weechat.buffer_set(self.buffer_pointer,
-                                       "hotlist", priority)
+                    weechat.buffer_set(self.buffer_pointer, "hotlist", priority)
                     self.hotlist_tss.add(message.ts)
                 if (
                     self.display_thread_replies()
@@ -501,8 +497,7 @@ class SlackConversation(SlackMessageBuffer):
                         if self.buffer_type == "private"
                         else MessagePriority.MESSAGE
                     )
-                    weechat.buffer_set(self.buffer_pointer,
-                                       "hotlist", priority.value)
+                    weechat.buffer_set(self.buffer_pointer, "hotlist", priority.value)
                     self.hotlist_tss.add(message.latest_reply)
                 await message.handle_thread_notify_and_auto_open()
 

@@ -142,7 +142,7 @@ def convert_int_to_roman(num: int) -> str:
 
 def ts_from_tag(tag: str) -> Optional[SlackTs]:
     if tag.startswith(ts_tag_prefix):
-        return SlackTs(tag[len(ts_tag_prefix):])
+        return SlackTs(tag[len(ts_tag_prefix) :])
     return None
 
 
@@ -237,8 +237,7 @@ class PendingMessageItem:
         if self.item_type == "conversation":
             try:
                 conversation = await self.message.workspace.conversations[self.item_id]
-                name = conversation.name_with_prefix(
-                    "short_name_without_padding")
+                name = conversation.name_with_prefix("short_name_without_padding")
             except (SlackApiError, SlackError) as e:
                 if is_not_found_error(e):
                     name = (
@@ -294,8 +293,7 @@ class PendingMessageItem:
                     or is_not_found_error(e)
                 ):
                     name = (
-                        self.fallback_name if self.fallback_name else f"@{
-                            self.item_id}"
+                        self.fallback_name if self.fallback_name else f"@{self.item_id}"
                     )
                 else:
                     raise e
@@ -339,15 +337,15 @@ class PendingMessageItem:
                 and "permalink" in file
             ):
                 url = f"{file['permalink']}?origin_team={
-                    self.message.workspace.id}&origin_channel={self.message.conversation.id}"
+                    self.message.workspace.id
+                }&origin_channel={self.message.conversation.id}"
                 title = unhtmlescape(file.get("title", ""))
                 return format_url(url, title)
             elif "url_private" in file:
                 title = unhtmlescape(file.get("title", ""))
                 return format_url(file["url_private"], title)
             else:
-                error = SlackError(self.message.workspace,
-                                   "Unsupported file", file)
+                error = SlackError(self.message.workspace, "Unsupported file", file)
                 uncaught_error = UncaughtError(error)
                 store_uncaught_error(uncaught_error)
                 return with_color(
@@ -386,8 +384,7 @@ class SlackMessage:
         self._message_json = message_json
         self._rendered_prefix = None
         self._rendered_message = None
-        self._parsed_message: Optional[List[Union[str,
-                                                  PendingMessageItem]]] = None
+        self._parsed_message: Optional[List[Union[str, PendingMessageItem]]] = None
         self.conversation = conversation
         self.ts = SlackTs(message_json["ts"])
         self.replies_tss: List[SlackTs] = []
@@ -774,20 +771,19 @@ class SlackMessage:
         if all(reply.is_self_msg for reply in replies_after_last_read_and_notify):
             return
 
-        channel_name = self.conversation.name_with_prefix(
-            "short_name_without_padding")
+        channel_name = self.conversation.name_with_prefix("short_name_without_padding")
         if any(
             reply.should_highlight(only_mention=True)
             for reply in replies_after_last_read_and_notify
         ):
             self.workspace.print(
-                f"You were mentioned in thread {
-                    self.hash} in channel {channel_name}"
+                f"You were mentioned in thread {self.hash} in channel {channel_name}"
             )
         else:
             self.workspace.print(
-                f"New message in subscribed thread {
-                    self.hash} in channel {channel_name}"
+                f"New message in subscribed thread {self.hash} in channel {
+                    channel_name
+                }"
             )
 
         self._last_thread_notify = replies[-1].ts
@@ -861,8 +857,7 @@ class SlackMessage:
 
         if self.deleted:
             self._parsed_message = [
-                with_color(
-                    shared.config.color.deleted_message.value, "(deleted)")
+                with_color(shared.config.color.deleted_message.value, "(deleted)")
             ]
 
         elif self._message_json.get("subtype") in [
@@ -876,8 +871,7 @@ class SlackMessage:
                 "group_join",
             ]
             text_action = (
-                f"{with_color(
-                    shared.config.color.message_join.value, 'has joined')}"
+                f"{with_color(shared.config.color.message_join.value, 'has joined')}"
                 if is_join
                 else f"{with_color(shared.config.color.message_quit.value, 'has left')}"
             )
@@ -911,13 +905,13 @@ class SlackMessage:
 
             huddle_text = "Huddle started" if not room["has_ended"] else "Huddle ended"
             name_text = f", name: {room['name']}" if room["name"] else ""
-            texts: List[Union[str, PendingMessageItem]] = [
-                huddle_text + name_text]
+            texts: List[Union[str, PendingMessageItem]] = [huddle_text + name_text]
 
             for channel_id in room["channels"]:
                 texts.append(
-                    f"\nhttps://app.slack.com/client/{
-                        team}/{channel_id}?open=start_huddle"
+                    f"\nhttps://app.slack.com/client/{team}/{
+                        channel_id
+                    }?open=start_huddle"
                 )
             self._parsed_message = texts
 
@@ -931,8 +925,7 @@ class SlackMessage:
                     for item in items
                 ]
 
-            files = self._render_files(
-                self._message_json.get("files", []), bool(texts))
+            files = self._render_files(self._message_json.get("files", []), bool(texts))
             attachment_items = self._render_attachments(texts)
             self._parsed_message = texts + files + attachment_items
 
@@ -957,8 +950,11 @@ class SlackMessage:
                 ]
             )
             text_edited = (
-                f" {with_color(
-                    shared.config.color.edited_message_suffix.value, '(edited)')}"
+                f" {
+                    with_color(
+                        shared.config.color.edited_message_suffix.value, '(edited)'
+                    )
+                }"
                 if self._message_json.get("edited")
                 else ""
             )
@@ -967,8 +963,7 @@ class SlackMessage:
         except Exception as e:
             uncaught_error = UncaughtError(e)
             print_error(store_and_format_uncaught_error(uncaught_error))
-            text = f"<Error rendering message {
-                self.ts}, error id: {uncaught_error.id}>"
+            text = f"<Error rendering message {self.ts}, error id: {uncaught_error.id}>"
             self._rendered_message = with_color(
                 shared.config.color.render_error.value, text
             )
@@ -998,8 +993,7 @@ class SlackMessage:
             )
         elif item_id.startswith("@"):
             return PendingMessageItem(
-                self, "user", removeprefix(
-                    item_id, "@"), "mention", fallback_name
+                self, "user", removeprefix(item_id, "@"), "mention", fallback_name
             )
         elif item_id.startswith("!subteam^"):
             return PendingMessageItem(
@@ -1011,8 +1005,7 @@ class SlackMessage:
             )
         elif item_id in ["!channel", "!everyone", "!group", "!here"]:
             return PendingMessageItem(
-                self, "broadcast", removeprefix(
-                    item_id, "!"), "mention", fallback_name
+                self, "broadcast", removeprefix(item_id, "!"), "mention", fallback_name
             )
         elif item_id.startswith("!date"):
             parts = item_id.split("^")
@@ -1030,7 +1023,7 @@ class SlackMessage:
         i = 0
         for match in re_ref.finditer(message):
             if i < match.start(0):
-                yield message[i: match.start(0)]
+                yield message[i : match.start(0)]
             yield self._resolve_ref(match["id"], match["fallback_name"])
             i = match.end(0)
 
@@ -1057,15 +1050,13 @@ class SlackMessage:
             )
             nicks = [user.nick.format() for user in users]
             nicks_extra = (
-                ["and others"] if len(
-                    reaction["users"]) < reaction["count"] else []
+                ["and others"] if len(reaction["users"]) < reaction["count"] else []
             )
             users_str = f"({', '.join(nicks + nicks_extra)})"
         else:
             users_str = ""
 
-        reaction_string = f"{get_emoji(reaction['name'])}{
-            reaction['count']}{users_str}"
+        reaction_string = f"{get_emoji(reaction['name'])}{reaction['count']}{users_str}"
 
         if self.workspace.my_user.id in reaction["users"]:
             return with_color(
@@ -1090,8 +1081,7 @@ class SlackMessage:
         reactions_string = " ".join(reaction_strings)
         if reactions_string:
             return " " + with_color(
-                shared.config.color.reaction_suffix.value, f"[{
-                    reactions_string}]"
+                shared.config.color.reaction_suffix.value, f"[{reactions_string}]"
             )
         else:
             return ""
@@ -1121,8 +1111,7 @@ class SlackMessage:
             return ""
 
         subscribed_text = " Subscribed" if self.subscribed else ""
-        text = f"[ Thread: {self.hash} Replies: {
-            reply_count}{subscribed_text} ]"
+        text = f"[ Thread: {self.hash} Replies: {reply_count}{subscribed_text} ]"
         return " " + with_color(nick_color(str(self.hash)), text)
 
     def _render_blocks(
@@ -1143,18 +1132,15 @@ class SlackMessage:
                     items: List[Union[str, PendingMessageItem]] = []
                     for element in block["elements"]:
                         if element["type"] == "button":
-                            items.extend(
-                                self._render_block_element(element["text"]))
+                            items.extend(self._render_block_element(element["text"]))
                             if "url" in element:
                                 items.append(format_url(element["url"]))
                         else:
                             text = (
-                                f'<Unsupported block action type "{
-                                    element["type"]}">'
+                                f'<Unsupported block action type "{element["type"]}">'
                             )
                             items.append(
-                                with_color(
-                                    shared.config.color.render_error.value, text)
+                                with_color(shared.config.color.render_error.value, text)
                             )
                     block_lines.append(intersperse(items, " | "))
                 elif block["type"] == "call":
@@ -1171,14 +1157,12 @@ class SlackMessage:
                     block_lines.append(intersperse(items, " | "))
                 elif block["type"] == "image":
                     if "title" in block:
-                        block_lines.append(
-                            self._render_block_element(block["title"]))
+                        block_lines.append(self._render_block_element(block["title"]))
                     block_lines.append(self._render_block_element(block))
                 elif block["type"] == "rich_text":
                     for element in block.get("elements", []):
                         if element["type"] == "rich_text_section":
-                            rendered = self._render_block_rich_text_section(
-                                element)
+                            rendered = self._render_block_rich_text_section(element)
                             if rendered:
                                 block_lines.append(rendered)
                         elif element["type"] == "rich_text_list":
@@ -1213,11 +1197,9 @@ class SlackMessage:
                                 for sub_element in element["elements"]
                             ]
                             if texts:
-                                block_lines.append(
-                                    [f"```\n{''.join(texts)}\n```"])
+                                block_lines.append([f"```\n{''.join(texts)}\n```"])
                         else:
-                            text = f'<Unsupported rich text type "{
-                                element["type"]}">'
+                            text = f'<Unsupported rich text type "{element["type"]}">'
                             block_lines.append(
                                 [
                                     with_color(
@@ -1228,14 +1210,14 @@ class SlackMessage:
                 else:
                     text = f'<Unsupported block type "{block["type"]}">'
                     block_lines.append(
-                        [with_color(
-                            shared.config.color.render_error.value, text)]
+                        [with_color(shared.config.color.render_error.value, text)]
                     )
             except Exception as e:
                 uncaught_error = UncaughtError(e)
                 print_error(store_and_format_uncaught_error(uncaught_error))
-                text = f"<Error rendering message {
-                    self.ts}, error id: {uncaught_error.id}>"
+                text = f"<Error rendering message {self.ts}, error id: {
+                    uncaught_error.id
+                }>"
                 block_lines.append(
                     [with_color(shared.config.color.render_error.value, text)]
                 )
@@ -1246,8 +1228,7 @@ class SlackMessage:
         self, section: SlackMessageBlockRichTextSection, lines_prepend: str = ""
     ) -> List[Union[str, PendingMessageItem]]:
         texts: List[Union[str, PendingMessageItem]] = []
-        prev_element: SlackMessageBlockRichTextElement = {
-            "type": "text", "text": ""}
+        prev_element: SlackMessageBlockRichTextElement = {"type": "text", "text": ""}
         for element in section["elements"] + [prev_element.copy()]:
             colors_apply: List[str] = []
             colors_remove: List[str] = []
@@ -1427,8 +1408,7 @@ class SlackMessage:
                 link_shown = True
             if title and title_link:
                 lines.append(
-                    [f"{prepend_title_text}{format_url(
-                        htmlescape(title_link), title)}"]
+                    [f"{prepend_title_text}{format_url(htmlescape(title_link), title)}"]
                 )
                 prepend_title_text = ""
             elif title and not title_link:
@@ -1514,15 +1494,13 @@ class SlackMessage:
                     )
                     footer.append(f" | {timestamp_formatted.capitalize()}")
 
-                lines.append(
-                    [item for item in self._unfurl_and_unescape(footer)])
+                lines.append([item for item in self._unfurl_and_unescape(footer)])
 
             fallback = attachment.get("fallback")
             if not any(lines) and fallback and not link_shown:
                 lines.append([fallback])
 
-            items = [item for items in intersperse(
-                lines, ["\n"]) for item in items]
+            items = [item for items in intersperse(lines, ["\n"]) for item in items]
 
             texts_separate_newlines = [
                 item_separate_newline

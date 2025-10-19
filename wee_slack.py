@@ -138,7 +138,7 @@ SLACK_API_TRANSLATOR = {
 
 CONFIG_PREFIX = "plugins.var.python." + SCRIPT_NAME
 
-###### Decorators have to be up here
+# Decorators have to be up here
 
 
 def slack_buffer_or_ignore(f):
@@ -202,7 +202,7 @@ if hasattr(ssl, "get_default_verify_paths") and callable(ssl.get_default_verify_
 EMOJI = {}
 EMOJI_WITH_SKIN_TONES_REVERSE = {}
 
-###### Unicode handling
+# Unicode handling
 
 
 def encode_to_utf8(data):
@@ -356,7 +356,7 @@ class ValuesViewReversible(ValuesView, Reversible):
             yield self._mapping[key]
 
 
-##### Helpers
+# Helpers
 
 
 def colorize_string(color, string, reset_color="reset"):
@@ -496,7 +496,7 @@ def replace_emoji_with_string(text):
     return emoji or text
 
 
-###### New central Event router
+# New central Event router
 
 
 class EventRouter(object):
@@ -950,7 +950,7 @@ class WeechatController(object):
         self.previous_buffer = data
 
 
-###### New Local Processors
+# New Local Processors
 
 
 def local_process_async_slack_api_request(request, event_router):
@@ -979,7 +979,7 @@ def local_process_async_slack_api_request(request, event_router):
         )
 
 
-###### New Callbacks
+# New Callbacks
 
 
 @utf8_decode
@@ -1222,12 +1222,14 @@ def channel_completion_cb(data, completion_item, current_buffer, completion):
     Adds all channels on all teams to completion list
     """
     current_channel = EVENTROUTER.weechat_controller.buffers.get(current_buffer)
-    should_include_channel = lambda channel: channel.active and channel.type in [
-        "channel",
-        "group",
-        "private",
-        "shared",
-    ]
+
+    def should_include_channel(channel):
+        return channel.active and channel.type in [
+            "channel",
+            "group",
+            "private",
+            "shared",
+        ]
 
     other_teams = [
         team
@@ -1450,7 +1452,7 @@ def stop_talking_to_slack():
     return w.WEECHAT_RC_OK
 
 
-##### New Classes
+# New Classes
 
 
 class SlackRequest(object):
@@ -1588,7 +1590,8 @@ class SlackChannelSection(object):
         self.next_channel_section_id = kwargs["next_channel_section_id"]
         self.channel_ids = kwargs["channel_ids_page"]["channel_ids"]
         self.section_buffer = None
-        self.create_buffer()
+        if config.channel_section_buffer:
+            self.create_buffer()
 
     def __repr__(self):
         return "Name:{} Identifier:{}".format(self.name, self.identifier)
@@ -1603,17 +1606,16 @@ class SlackChannelSection(object):
             )
 
             w.buffer_set(
-                self.section_buffer, "localvar_set_type", get_localvar_type(
-                    self.type)
+                self.section_buffer, "localvar_set_type", get_localvar_type(self.type)
             )
-            w.buffer_set(
-                    self.section_buffer, "localvar_set_channel_section", self.name)
+            w.buffer_set(self.section_buffer, "localvar_set_channel_section", self.name)
 
             w.buffer_set(
                 self.section_buffer,
-                "localvar_set_channel_ids", ",".join(self.channel_ids))
-            w.buffer_set(self.section_buffer,
-                         "localvar_set_slack_type", self.type)
+                "localvar_set_channel_ids",
+                ",".join(self.channel_ids),
+            )
+            w.buffer_set(self.section_buffer, "localvar_set_slack_type", self.type)
 
 
 class SlackTeam(object):
@@ -1735,8 +1737,7 @@ class SlackTeam(object):
             w.buffer_set(self.channel_buffer, "input_prompt", self.nick)
             w.buffer_set(self.channel_buffer, "input_multiline", "1")
             w.buffer_set(self.channel_buffer, "localvar_set_type", "server")
-            w.buffer_set(self.channel_buffer,
-                         "localvar_set_slack_type", self.type)
+            w.buffer_set(self.channel_buffer, "localvar_set_slack_type", self.type)
             w.buffer_set(self.channel_buffer, "localvar_set_nick", self.nick)
             w.buffer_set(self.channel_buffer, "localvar_set_server", self.name)
             w.buffer_set(
@@ -2493,11 +2494,16 @@ class SlackChannel(SlackChannelCommon):
                 w.buffer_set(self.channel_buffer, "localvar_set_server", self.team.name)
             if self.channel_section:
                 channel_section_number = w.buffer_get_integer(
-                    self.channel_section.section_buffer, "number")
+                    self.channel_section.section_buffer, "number"
+                )
                 w.buffer_set(
                     self.channel_buffer,
-                    "localvar_set_channel_section", self.channel_section.name)
-                w.buffer_set(self.channel_buffer, "number", str(channel_section_number+1))
+                    "localvar_set_channel_section",
+                    self.channel_section.name,
+                )
+                w.buffer_set(
+                    self.channel_buffer, "number", str(channel_section_number + 1)
+                )
 
         self.update_nicklist()
 
@@ -3719,7 +3725,7 @@ class SlackTS(object):
         return str(self.minor)
 
 
-###### New handlers
+# New handlers
 
 
 def handle_rtmstart(login_data, eventrouter, team, channel, metadata):
@@ -4138,7 +4144,7 @@ def handle_subscriptionsthreadremove(json, eventrouter, team, channel, metadata)
             print_error("Couldn't remove thread subscription: {}".format(json["error"]))
 
 
-###### New/converted process_ and subprocess_ methods
+# New/converted process_ and subprocess_ methods
 def process_hello(message_json, eventrouter, team, channel, metadata):
     team.subscribe_users_presence()
 
@@ -4589,7 +4595,7 @@ def process_thread_unsubscribed(message_json, eventrouter, team, channel, metada
         channel.change_message(parent_ts)
 
 
-###### New module/global methods
+# New module/global methods
 def render_formatting(text):
     text = re.sub(
         r"(^| )\*([^*\n`]+)\*(?=[^\w]|$)",
@@ -5402,7 +5408,7 @@ def set_own_presence_active(team):
     channel.team.send_to_websocket(request, expect_reply=False)
 
 
-###### New/converted command_ commands
+# New/converted command_ commands
 
 
 @slack_buffer_or_ignore
@@ -5748,7 +5754,10 @@ def command_teams(data, current_buffer, args):
     """
     team = EVENTROUTER.weechat_controller.buffers[current_buffer].team
     teams = EVENTROUTER.teams.values()
-    extra_info_function = lambda team: "token: {}".format(token_for_print(team.token))
+
+    def extra_info_function(team):
+        return "token: {}".format(token_for_print(team.token))
+
     return print_team_items_info(team, "Slack teams", teams, extra_info_function)
 
 
@@ -5966,7 +5975,10 @@ def command_thread(data, current_buffer, args):
 
     message = channel.message_from_hash(args)
     if not message:
-        message_filter = lambda message: message.number_of_replies()
+
+        def message_filter(message):
+            return message.number_of_replies()
+
         message = channel.message_from_hash_or_index(args, message_filter)
 
     if message:
@@ -5992,7 +6004,10 @@ def subscribe_helper(current_buffer, args, usage, api):
     if isinstance(channel, SlackThreadChannel) and not args:
         message = channel.parent_message
     else:
-        message_filter = lambda message: message.number_of_replies()
+
+        def message_filter(message):
+            return message.number_of_replies()
+
         message = channel.message_from_hash_or_index(args, message_filter)
 
     if not message:
@@ -6018,7 +6033,8 @@ def command_subscribe(data, current_buffer, args):
     Subscribe to a thread, so that you are alerted to new messages. When in a
     thread buffer, you can omit the thread id.
 
-    This command only works when using a session token, see the readme: https://github.com/wee-slack/wee-slack#4-add-your-slack-api-tokens
+    #4-add-your-slack-api-tokens
+    This command only works when using a session token, see the readme: https://github.com/wee-slack/wee-slack
     """
     return subscribe_helper(
         current_buffer,
@@ -6040,7 +6056,8 @@ def command_unsubscribe(data, current_buffer, args):
     you are not alerted to new messages. When in a thread buffer, you can omit
     the thread id.
 
-    This command only works when using a session token, see the readme: https://github.com/wee-slack/wee-slack#4-add-your-slack-api-tokens
+    #4-add-your-slack-api-tokens
+    This command only works when using a session token, see the readme: https://github.com/wee-slack/wee-slack
     """
     return subscribe_helper(
         current_buffer,
@@ -6563,7 +6580,7 @@ def set_unread_current_buffer_cb(data, current_buffer, command):
     return w.WEECHAT_RC_OK
 
 
-###### NEW EXCEPTIONS
+# NEW EXCEPTIONS
 
 
 class InvalidType(Exception):
@@ -6576,7 +6593,7 @@ class InvalidType(Exception):
         super(InvalidType, self).__init__(type_str)
 
 
-###### New but probably old and need to migrate
+# New but probably old and need to migrate
 
 
 def closed_slack_debug_buffer_cb(data, buffer):
@@ -6765,7 +6782,7 @@ def setup_hooks():
     # w.hook_timer(3000, 0, 0, "slack_connection_persistence_cb", "")
 
 
-##### END NEW
+# END NEW
 
 
 def dbg(message, level=0, main_buffer=False, fout=False):
@@ -6786,7 +6803,7 @@ def dbg(message, level=0, main_buffer=False, fout=False):
                 w.prnt(slack_debug, message)
 
 
-###### Config code
+# Config code
 class PluginConfig(object):
     Setting = namedtuple("Setting", ["default", "desc"])
     # Default settings.
@@ -6816,6 +6833,9 @@ class PluginConfig(object):
             desc="Change the prefix of a channel from # to > when someone is"
             " typing in it. Note that this will (temporarily) affect the sort"
             " order if you sort buffers by name rather than by number.",
+        ),
+        "channel_section_buffer": Setting(
+            default="false", desc="Create server buffers for channel sections"
         ),
         "color_buflist_muted_channels": Setting(
             default="darkgray", desc="Color to use for muted channels in the buflist"
@@ -7223,7 +7243,7 @@ def initiate_connection(token):
             "usergroups": 1,
             "prefs": 1,
             "channel_sections": 1,
-            "presence": 1
+            "presence": 1,
         },
         "errors": [],
     }
@@ -7269,7 +7289,8 @@ def initiate_connection(token):
         dbg("initial_data {}".format(json.dumps(initial_data["remaining"])), 5)
         if not response_json["ok"]:
             initial_data["errors"].append(
-                "channel_sections: {}".format(response_json["error"]))
+                "channel_sections: {}".format(response_json["error"])
+            )
             initial_data["remaining"]["channel_sections"] -= 1
             create_team(token, initial_data)
             return
@@ -7411,7 +7432,7 @@ def create_team(token, initial_data):
 
             channel_sections = {}
             for channel_section in initial_data["channel_sections"]:
-                # create a channel section is there is at least one channel in the section 
+                # create a channel section if there is at least one channel in the section
                 if len(channel_section["channel_ids_page"]["channel_ids"]) > 0:
                     section = SlackChannelSection(**channel_section)
                 for channel_id in channel_section["channel_ids_page"]["channel_ids"]:
@@ -7421,7 +7442,9 @@ def create_team(token, initial_data):
             channels = {}
             for channel_info in initial_data["channels"]:
                 if channel_info["id"] in channel_sections:
-                    channel_info["channel_section"] = channel_sections[channel_info["id"]]
+                    channel_info["channel_section"] = channel_sections[
+                        channel_info["id"]
+                    ]
                 channels[channel_info["id"]] = create_channel_from_info(
                     eventrouter, channel_info, None, myidentifier, users
                 )

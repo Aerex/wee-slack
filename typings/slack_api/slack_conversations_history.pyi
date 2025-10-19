@@ -8,7 +8,6 @@ from slack_api.slack_files_info import SlackFile
 from slack_rtm.slack_rtm_message import SlackMessageRtm
 from typing_extensions import Literal, NotRequired, TypedDict, final
 
-
 @final
 class SlackMessageBlockRichTextElementTextStyle(TypedDict):
     bold: NotRequired[bool]
@@ -16,13 +15,11 @@ class SlackMessageBlockRichTextElementTextStyle(TypedDict):
     strike: NotRequired[bool]
     code: NotRequired[bool]
 
-
 @final
 class SlackMessageBlockRichTextElementText(TypedDict):
     type: Literal["text"]
     text: str
     style: NotRequired[SlackMessageBlockRichTextElementTextStyle]
-
 
 @final
 class SlackMessageBlockRichTextElementLink(TypedDict):
@@ -31,7 +28,6 @@ class SlackMessageBlockRichTextElementLink(TypedDict):
     text: NotRequired[str]
     style: NotRequired[SlackMessageBlockRichTextElementTextStyle]
 
-
 @final
 class SlackMessageBlockRichTextElementEmoji(TypedDict):
     type: Literal["emoji"]
@@ -39,12 +35,10 @@ class SlackMessageBlockRichTextElementEmoji(TypedDict):
     unicode: str
     skin_tone: NotRequired[int]
 
-
 @final
 class SlackMessageBlockRichTextElementColor(TypedDict):
     type: Literal["color"]
     value: str
-
 
 @final
 class SlackMessageBlockRichTextElementDate(TypedDict):
@@ -52,30 +46,25 @@ class SlackMessageBlockRichTextElementDate(TypedDict):
     timestamp: int
     format: str
 
-
 @final
 class SlackMessageBlockRichTextElementChannel(TypedDict):
     type: Literal["channel"]
     channel_id: str
-
 
 @final
 class SlackMessageBlockRichTextElementUser(TypedDict):
     type: Literal["user"]
     user_id: str
 
-
 @final
 class SlackMessageBlockRichTextElementUsergroup(TypedDict):
     type: Literal["usergroup"]
     usergroup_id: str
 
-
 @final
 class SlackMessageBlockRichTextElementBroadcast(TypedDict):
     type: Literal["broadcast"]
     range: Literal["channel", "here"]
-
 
 SlackMessageBlockRichTextElement = (
     SlackMessageBlockRichTextElementText
@@ -89,12 +78,10 @@ SlackMessageBlockRichTextElement = (
     | SlackMessageBlockRichTextElementBroadcast
 )
 
-
 @final
 class SlackMessageBlockRichTextSection(TypedDict):
     type: Literal["rich_text_section"]
     elements: List[SlackMessageBlockRichTextElement]
-
 
 @final
 class SlackMessageBlockRichTextPreformatted(TypedDict):
@@ -104,12 +91,10 @@ class SlackMessageBlockRichTextPreformatted(TypedDict):
     ]
     border: int
 
-
 @final
 class SlackMessageBlockRichTextQuote(TypedDict):
     type: Literal["rich_text_quote"]
     elements: List[SlackMessageBlockRichTextElement]
-
 
 @final
 class SlackMessageBlockRichTextList(TypedDict):
@@ -119,7 +104,6 @@ class SlackMessageBlockRichTextList(TypedDict):
     indent: int
     offset: NotRequired[int]
     border: int
-
 
 @final
 class SlackMessageBlockRichText(TypedDict):
@@ -131,7 +115,6 @@ class SlackMessageBlockRichText(TypedDict):
         | SlackMessageBlockRichTextQuote
         | SlackMessageBlockRichTextList
     ]
-
 
 @final
 class SlackMessageBlockCallV1(TypedDict):
@@ -154,12 +137,10 @@ class SlackMessageBlockCallV1(TypedDict):
     was_accepted: bool
     has_ended: bool
 
-
 @final
 class SlackMessageBlockCallCall(TypedDict):
     v1: SlackMessageBlockCallV1
     media_backend_type: str
-
 
 @final
 class SlackMessageBlockCall(TypedDict):
@@ -169,13 +150,11 @@ class SlackMessageBlockCall(TypedDict):
     api_decoration_available: bool
     call: SlackMessageBlockCallCall
 
-
 @final
 class SlackMessageBlockCompositionPlainText(TypedDict):
     type: Literal["plain_text"]
     text: str
     emoji: NotRequired[bool]
-
 
 @final
 class SlackMessageBlockCompositionMrkdwn(TypedDict):
@@ -183,11 +162,9 @@ class SlackMessageBlockCompositionMrkdwn(TypedDict):
     text: str
     verbatim: NotRequired[bool]
 
-
 SlackMessageBlockCompositionText = (
     SlackMessageBlockCompositionPlainText | SlackMessageBlockCompositionMrkdwn
 )
-
 
 @final
 class SlackMessageBlockElementButton(TypedDict):
@@ -200,13 +177,11 @@ class SlackMessageBlockElementButton(TypedDict):
     confirm: NotRequired[object]
     accessibility_label: NotRequired[str]
 
-
 @final
 class SlackMessageBlockElementImage(TypedDict):
     type: Literal["image"]
     image_url: str
     alt_text: str
-
 
 SlackMessageBlockElementInteractive = SlackMessageBlockElementButton
 
@@ -214,27 +189,22 @@ SlackMessageBlockElement = (
     SlackMessageBlockElementInteractive | SlackMessageBlockElementImage
 )
 
-
 @final
 class SlackMessageBlockActions(TypedDict):
     type: Literal["actions"]
     block_id: NotRequired[str]
     elements: List[SlackMessageBlockElementInteractive]
 
-
 @final
 class SlackMessageBlockContext(TypedDict):
     type: Literal["context"]
     block_id: NotRequired[str]
-    elements: List[SlackMessageBlockCompositionText |
-                   SlackMessageBlockElementImage]
-
+    elements: List[SlackMessageBlockCompositionText | SlackMessageBlockElementImage]
 
 @final
 class SlackMessageBlockDivider(TypedDict):
     type: Literal["divider"]
     block_id: NotRequired[str]
-
 
 @final
 class SlackMessageBlockImage(TypedDict):
@@ -249,7 +219,6 @@ class SlackMessageBlockImage(TypedDict):
     is_animated: NotRequired[bool]
     fallback: NotRequired[str]
 
-
 @final
 class SlackMessageBlockSection(TypedDict):
     type: Literal["section"]
@@ -257,7 +226,6 @@ class SlackMessageBlockSection(TypedDict):
     text: NotRequired[SlackMessageBlockCompositionText]
     fields: NotRequired[List[SlackMessageBlockCompositionText]]
     accessory: NotRequired[SlackMessageBlockElement]
-
 
 SlackMessageBlock = (
     SlackMessageBlockRichText
@@ -268,7 +236,6 @@ SlackMessageBlock = (
     | SlackMessageBlockImage
     | SlackMessageBlockSection
 )
-
 
 @final
 class SlackMessageAttachmentStandard(TypedDict):
@@ -287,7 +254,6 @@ class SlackMessageAttachmentStandard(TypedDict):
     service_name: str
     footer: str
 
-
 @final
 class SlackMessageAttachmentMsgUnfurl(TypedDict):
     is_msg_unfurl: Literal[True]
@@ -295,11 +261,9 @@ class SlackMessageAttachmentMsgUnfurl(TypedDict):
     footer: str
     # incomplete
 
-
 SlackMessageAttachment = (
     SlackMessageAttachmentStandard | SlackMessageAttachmentMsgUnfurl
 )
-
 
 @final
 class SlackMessageReaction(TypedDict):
@@ -307,12 +271,10 @@ class SlackMessageReaction(TypedDict):
     users: List[str]
     count: int
 
-
 @final
 class SlackMessageEdited(TypedDict):
     user: str
     ts: str
-
 
 @final
 class SlackMessageUserProfile(TypedDict):
@@ -326,7 +288,6 @@ class SlackMessageUserProfile(TypedDict):
     is_restricted: bool
     is_ultra_restricted: bool
 
-
 @final
 class SlackMessageBotProfile(TypedDict):
     id: str
@@ -337,13 +298,11 @@ class SlackMessageBotProfile(TypedDict):
     icons: Dict[str, str]
     team_id: str
 
-
 class SlackMessageCommon(TypedDict):
     type: Literal["message"]
     text: str
     ts: str
     reactions: NotRequired[List[SlackMessageReaction]]
-
 
 class SlackMessageStandardCommon(SlackMessageCommon):
     client_msg_id: NotRequired[str]
@@ -356,20 +315,16 @@ class SlackMessageStandardCommon(SlackMessageCommon):
     team: NotRequired[str]
     edited: SlackMessageEdited
 
-
 @final
 class SlackMessageStandardFinal(SlackMessageStandardCommon):
     pass
 
-
 class SlackMessageMe(SlackMessageStandardCommon):
     subtype: Literal["me_message"]
-
 
 @final
 class SlackMessageMeFinal(SlackMessageMe):
     pass
-
 
 class SlackMessageThreadParentCommon(SlackMessageStandardCommon):
     thread_ts: str
@@ -379,36 +334,29 @@ class SlackMessageThreadParentCommon(SlackMessageStandardCommon):
     reply_users: List[str]
     is_locked: bool
 
-
 class SlackMessageThreadParentNotSubscribed(SlackMessageThreadParentCommon):
     subscribed: Literal[False]
-
 
 @final
 class SlackMessageThreadParentNotSubscribedFinal(SlackMessageThreadParentNotSubscribed):
     pass
 
-
 class SlackMessageThreadParentSubscribed(SlackMessageThreadParentCommon):
     subscribed: Literal[True]
     last_read: str
 
-
 @final
 class SlackMessageThreadParentSubscribedFinal(SlackMessageThreadParentSubscribed):
     pass
-
 
 class SlackMessageThreadBroadcast(SlackMessageThreadCommon):
     subtype: Literal["thread_broadcast"]
     root: SlackMessageThreadParentCommon
     # TODO: team is missing in response
 
-
 @final
 class SlackMessageThreadBroadcastFinal(SlackMessageThreadBroadcast):
     pass
-
 
 class SlackMessageWithFiles(SlackMessageCommon):
     user: NotRequired[str]
@@ -419,11 +367,9 @@ class SlackMessageWithFiles(SlackMessageCommon):
     upload: bool
     display_as_bot: bool
 
-
 @final
 class SlackMessageWithFilesFinal(SlackMessageWithFiles):
     pass
-
 
 class SlackMessageSubtypeHuddleThreadRoom(TypedDict):
     id: str
@@ -458,7 +404,6 @@ class SlackMessageSubtypeHuddleThreadRoom(TypedDict):
     call_family: str
     pending_invitees: Dict[str, str]
 
-
 class SlackMessageSubtypeHuddleThread(SlackMessageStandardCommon):
     subtype: Literal["huddle_thread"]
     channel: str
@@ -466,13 +411,11 @@ class SlackMessageSubtypeHuddleThread(SlackMessageStandardCommon):
     no_notifications: bool
     room: SlackMessageSubtypeHuddleThreadRoom
 
-
 @final
 class SlackMessageSubtypeHuddleThreadFinal(SlackMessageSubtypeHuddleThread):
     pass
 
 # TODO: Add other subtypes
-
 
 class SlackMessageSubtypeBotMessage(SlackMessageCommon):
     subtype: Literal["bot_message"]
@@ -480,11 +423,9 @@ class SlackMessageSubtypeBotMessage(SlackMessageCommon):
     username: NotRequired[str]
     icons: NotRequired[Dict[str, str]]
 
-
 @final
 class SlackMessageSubtypeBotMessageFinal(SlackMessageSubtypeBotMessage):
     pass
-
 
 class SlackMessageSubtypeBotRemove(SlackMessageCommon):
     subtype: Literal["bot_remove"]
@@ -493,11 +434,9 @@ class SlackMessageSubtypeBotRemove(SlackMessageCommon):
     bot_id: str
     bot_link: str
 
-
 @final
 class SlackMessageSubtypeBotRemoveFinal(SlackMessageSubtypeBotRemove):
     pass
-
 
 class SlackMessageSubtypeBotAdd(SlackMessageCommon):
     subtype: Literal["bot_add"]
@@ -506,11 +445,9 @@ class SlackMessageSubtypeBotAdd(SlackMessageCommon):
     bot_id: str
     bot_link: str
 
-
 @final
 class SlackMessageSubtypeBotAddFinal(SlackMessageSubtypeBotAdd):
     pass
-
 
 class SlackMessageSubtypeChannelJoin(SlackMessageCommon):
     subtype: Literal["channel_join", "group_join"]
@@ -520,11 +457,9 @@ class SlackMessageSubtypeChannelJoin(SlackMessageCommon):
     bot_profile: NotRequired[SlackMessageBotProfile]
     inviter: NotRequired[str]
 
-
 @final
 class SlackMessageSubtypeChannelJoinFinal(SlackMessageSubtypeChannelJoin):
     pass
-
 
 class SlackMessageSubtypeChannelLeave(SlackMessageCommon):
     subtype: Literal["channel_leave", "group_leave"]
@@ -533,11 +468,9 @@ class SlackMessageSubtypeChannelLeave(SlackMessageCommon):
     bot_id: NotRequired[str]
     bot_profile: NotRequired[SlackMessageBotProfile]
 
-
 @final
 class SlackMessageSubtypeChannelLeaveFinal(SlackMessageSubtypeChannelLeave):
     pass
-
 
 class SlackMessageSubtypeChannelTopic(SlackMessageCommon):
     subtype: Literal["channel_topic"]
@@ -547,11 +480,9 @@ class SlackMessageSubtypeChannelTopic(SlackMessageCommon):
     bot_id: NotRequired[str]
     bot_profile: NotRequired[SlackMessageBotProfile]
 
-
 @final
 class SlackMessageSubtypeChannelTopicFinal(SlackMessageSubtypeChannelTopic):
     pass
-
 
 SlackMessage = (
     SlackMessageStandardFinal
@@ -571,7 +502,6 @@ SlackMessage = (
     | SlackMessageRtm
 )
 
-
 @final
 class SlackConversationsHistorySuccessResponse(TypedDict):
     ok: Literal[True]
@@ -581,7 +511,6 @@ class SlackConversationsHistorySuccessResponse(TypedDict):
     pin_count: int
     channel_actions_ts: None
     channel_actions_count: int
-
 
 SlackConversationsHistoryResponse = (
     SlackConversationsHistorySuccessResponse | SlackErrorResponse

@@ -34,6 +34,13 @@ slack` after changing it to take effect.
 
 **Description:** Change the prefix of a channel from # to > when someone is typing in it. Note that this will (temporarily) affect the sort order if you sort buffers by name rather than by number.
 
+### channel_section_buffer
+
+**Default:** `false`
+
+**Description:** Create channel sections as server buffers
+
+
 ### color_buflist_muted_channels
 
 **Default:** `darkgray`
