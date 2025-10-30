@@ -322,9 +322,7 @@ class SlackMessageBuffer(SlackBuffer):
             did_update = modify_buffer_line(self.buffer_pointer, message.ts, new_text)
             if not did_update:
                 print_error(
-                    f"Didn't find message with ts {message.ts} when last_printed_ts is {
-                        self.last_printed_ts
-                    }, message: {message}"
+                    f"Didn't find message with ts {message.ts} when last_printed_ts is {self.last_printed_ts}, message: {message}"
                 )
             return False
 
@@ -513,9 +511,7 @@ class SlackMessageBuffer(SlackBuffer):
 
     async def process_input(self, input_data: str):
         special = re.match(
-            rf"{MESSAGE_ID_REGEX_STRING}?(?:{REACTION_CHANGE_REGEX_STRING}{
-                EMOJI_CHAR_OR_NAME_REGEX_STRING
-            }\s*|s/)",
+            rf"{MESSAGE_ID_REGEX_STRING}?(?:{REACTION_CHANGE_REGEX_STRING}{EMOJI_CHAR_OR_NAME_REGEX_STRING}\s*|s/)",
             input_data,
         )
         if special:

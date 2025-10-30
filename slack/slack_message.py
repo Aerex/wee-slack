@@ -336,9 +336,7 @@ class PendingMessageItem:
                 file.get("mimetype") == "application/vnd.slack-docs"
                 and "permalink" in file
             ):
-                url = f"{file['permalink']}?origin_team={
-                    self.message.workspace.id
-                }&origin_channel={self.message.conversation.id}"
+                url = f"{file['permalink']}?origin_team={self.message.workspace.id}&origin_channel={self.message.conversation.id}"
                 title = unhtmlescape(file.get("title", ""))
                 return format_url(url, title)
             elif "url_private" in file:
@@ -519,8 +517,7 @@ class SlackMessage:
         self._parsed_message = None
 
     def update_message_json(self, message_json: SlackMessageDict):
-        # pyright: ignore [reportArgumentType, reportCallIssue]
-        self._message_json.update(message_json)
+        self._message_json.update(message_json)  # pyright: ignore [reportArgumentType, reportCallIssue]
         self._rendered_prefix = None
         self._rendered_message = None
         self._parsed_message = None
@@ -537,8 +534,7 @@ class SlackMessage:
     async def update_subscribed(
         self, subscribed: bool, subscription: SlackThreadSubscription
     ):
-        # pyright: ignore [reportGeneralTypeIssues]
-        self._message_json["subscribed"] = subscribed
+        self._message_json["subscribed"] = subscribed  # pyright: ignore [reportGeneralTypeIssues]
         self.last_read = SlackTs(subscription["last_read"])
         await self.conversation.rerender_message(self)
         if subscribed:
@@ -781,9 +777,7 @@ class SlackMessage:
             )
         else:
             self.workspace.print(
-                f"New message in subscribed thread {self.hash} in channel {
-                    channel_name
-                }"
+                f"New message in subscribed thread {self.hash} in channel {channel_name}"
             )
 
         self._last_thread_notify = replies[-1].ts
@@ -909,9 +903,7 @@ class SlackMessage:
 
             for channel_id in room["channels"]:
                 texts.append(
-                    f"\nhttps://app.slack.com/client/{team}/{
-                        channel_id
-                    }?open=start_huddle"
+                    f"\nhttps://app.slack.com/client/{team}/{channel_id}?open=start_huddle"
                 )
             self._parsed_message = texts
 
@@ -950,11 +942,7 @@ class SlackMessage:
                 ]
             )
             text_edited = (
-                f" {
-                    with_color(
-                        shared.config.color.edited_message_suffix.value, '(edited)'
-                    )
-                }"
+                f" {with_color(shared.config.color.edited_message_suffix.value, '(edited)')}"
                 if self._message_json.get("edited")
                 else ""
             )
@@ -1215,9 +1203,7 @@ class SlackMessage:
             except Exception as e:
                 uncaught_error = UncaughtError(e)
                 print_error(store_and_format_uncaught_error(uncaught_error))
-                text = f"<Error rendering message {self.ts}, error id: {
-                    uncaught_error.id
-                }>"
+                text = f"<Error rendering message {self.ts}, error id: {uncaught_error.id}>"
                 block_lines.append(
                     [with_color(shared.config.color.render_error.value, text)]
                 )
